@@ -301,7 +301,7 @@ void BroanComponent::logRegisterWrites(const std::vector<uint8_t>& message)
 			for( size_t b = 0; b < 4; b++ )
 				value.m_value.m_rgBytes[b] = static_cast<char>(message[i+b]);
 			ESP_LOGW("broan", "Sniffed write %02X%02X (%s): float %f / int %i", nOpcodeHigh, nOpcodeLow, pszKnown,
-				value.m_value.m_flValue, value.m_value.m_nValue );
+				value.m_value.m_flValue, (int)value.m_value.m_nValue );
 		}
 		else if( len == 1 )
 			ESP_LOGW("broan", "Sniffed write %02X%02X (%s): byte %02X", nOpcodeHigh, nOpcodeLow, pszKnown, message[i] );
@@ -578,8 +578,8 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 					break;
 				}
 				
-				char buf[6];
-				snprintf( buf, sizeof(buf), "W%u", pField->m_value.m_nValue );
+				char buf[12];
+				snprintf( buf, sizeof(buf), "W%u", (unsigned)pField->m_value.m_nValue );
 
 				warning_code_text_sensor_->publish_state(buf);
 			}
@@ -595,8 +595,8 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 					break;
 				}
 				
-				char buf[6];
-				snprintf( buf, sizeof(buf), "E%u", pField->m_value.m_nValue );
+				char buf[12];
+				snprintf( buf, sizeof(buf), "E%u", (unsigned)pField->m_value.m_nValue );
 
 				fault_code_text_sensor_->publish_state(buf);
 			}
@@ -628,7 +628,7 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 				ESP_LOGD("broan","%02X%02X is now Byte %02X", nOpcodeHigh, nOpcodeLow, pField->m_value.m_chValue );
 				break;
 			case BroanFieldType::Int:
-				ESP_LOGD("broan","%02X%02X is now Int %i", nOpcodeHigh, nOpcodeLow, pField->m_value.m_nValue );
+				ESP_LOGD("broan","%02X%02X is now Int %i", nOpcodeHigh, nOpcodeLow, (int)pField->m_value.m_nValue );
 				break;
 			case BroanFieldType::Float:
 				ESP_LOGD("broan","%02X%02X is now Float %f", nOpcodeHigh, nOpcodeLow, pField->m_value.m_flValue );
@@ -660,12 +660,12 @@ void BroanComponent::handleUnknownField(uint32_t nOpcodeHigh, uint32_t nOpcodeLo
 
 			if( len == 4)
 				ESP_LOGD("broan","%02X%02X field is unmapped. Value: %f / %i -->  %f / %i", nOpcodeHigh, nOpcodeLow,
-					copy.m_value.m_flValue, copy.m_value.m_nValue,
-					m_vecFieldData[kv].m_value.m_flValue, m_vecFieldData[kv].m_value.m_nValue ) ;
+					copy.m_value.m_flValue, (int)copy.m_value.m_nValue,
+					m_vecFieldData[kv].m_value.m_flValue, (int)m_vecFieldData[kv].m_value.m_nValue ) ;
 			else if (len == 1)
 				ESP_LOGD("broan","%02X%02X field is unmapped. Value: %f / %i -->  %f / %i", nOpcodeHigh, nOpcodeLow,
-					copy.m_value.m_flValue, copy.m_value.m_nValue,
-					m_vecFieldData[kv].m_value.m_flValue, m_vecFieldData[kv].m_value.m_nValue ) ;
+					copy.m_value.m_flValue, (int)copy.m_value.m_nValue,
+					m_vecFieldData[kv].m_value.m_flValue, (int)m_vecFieldData[kv].m_value.m_nValue ) ;
 		}
 	}
 	else
@@ -681,11 +681,17 @@ void BroanComponent::handleUnknownField(uint32_t nOpcodeHigh, uint32_t nOpcodeLo
 
 
 		if( len == 4)
-			ESP_LOGD("broan","%02X%02X field is unmapped. Value: %f / %i", nOpcodeHigh, nOpcodeLow, newField.m_value.m_flValue, newField.m_value.m_nValue );
+		{
+			ESP_LOGD("broan","%02X%02X field is unmapped. Value: %f / %i", nOpcodeHigh, nOpcodeLow, newField.m_value.m_flValue, (int)newField.m_value.m_nValue );
+		}
 		else if( len == 1 )
+		{
 			ESP_LOGD("broan","%02X%02X field is unmapped. Value: %i", nOpcodeHigh, nOpcodeLow, newField.m_value.m_chValue);
+		}
 		else
+		{
 			ESP_LOGD("broan","%02X%02X has unhandled field length %i: %s", nOpcodeHigh, nOpcodeLow, len, format_hex_pretty(&message[i], len).c_str() );
+		}
 #ifdef SCAN_UNKNOWN
 		m_vecFieldData[kv] = newField;
 #endif

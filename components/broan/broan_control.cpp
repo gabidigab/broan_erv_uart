@@ -171,7 +171,7 @@ void BroanComponent::setIntermittentPeriod( uint32_t period ) {
 	// S -> MS
 	//period *= 1000;
   
-	ESP_LOGI("broan_control", "Set int period: %i", period);
+	ESP_LOGI("broan_control", "Set int period: %u", (unsigned)period);
 
 	vecFields.push_back( m_vecFields[IntModeDuration].copyForUpdate( period ) );
 	m_vecFields[IntModeDuration].markDirty();
