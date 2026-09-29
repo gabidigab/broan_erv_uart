@@ -366,7 +366,7 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 	std::string strBuf;
 
-    while (i < message.size())
+    while (i + 3 <= message.size())
     {
         uint8_t nOpcodeHigh = message[i++];
         uint8_t nOpcodeLow  = message[i++];
@@ -376,16 +376,20 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 		i += len;
 
+		if( i > message.size() )
+		{
+			ESP_LOGW("broan", "Truncated field %02X%02X in register response", nOpcodeHigh, nOpcodeLow);
+			break;
+		}
+
 		uint32_t unField = lookupFieldIndex(nOpcodeHigh, nOpcodeLow);
 		if( unField == INVALID_FIELD )
-			continue;
-
-		BroanField_t *pField = &m_vecFields[unField];
-		if( !pField )
 		{
 			handleUnknownField(nOpcodeHigh, nOpcodeLow, len, nDataPos, message);
 			continue;
 		}
+
+		BroanField_t *pField = &m_vecFields[unField];
 
 		switch( pField->m_nType )
 		{
