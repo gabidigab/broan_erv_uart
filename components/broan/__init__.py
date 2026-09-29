@@ -17,12 +17,15 @@ broan_ns = cg.esphome_ns.namespace("broan")
 BroanComponent = broan_ns.class_("BroanComponent", cg.Component, uart.UARTDevice)
 
 CONF_BROAN_ID = "broan_id"
+CONF_LISTEN_ONLY = "listen_only"
 
 CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(BroanComponent),
             cv.Optional(CONF_FLOW_CONTROL_PIN): pins.gpio_output_pin_schema,
+            # Passive sniffer: never transmit, log what the wall controller writes.
+            cv.Optional(CONF_LISTEN_ONLY, default=False): cv.boolean,
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -49,6 +52,9 @@ async def to_code(config):
     await cg.register_component(var, config)
 
     await uart.register_uart_device(var, config)
+
+    if config[CONF_LISTEN_ONLY]:
+        cg.add_build_flag("-DLISTEN_ONLY")
 
     if CONF_FLOW_CONTROL_PIN in config:
         pin = await gpio_pin_expression(config[CONF_FLOW_CONTROL_PIN])

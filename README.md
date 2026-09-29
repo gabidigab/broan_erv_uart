@@ -49,6 +49,15 @@ In Humidity Control Mode, the controller sets a target humidity level and the ER
 
 To use humidity control mode once it is enabled, set the desired humidity with "Humidity Setpoint", and then turn on the Humidity Control switch.
 
+## Capturing registers from a wall controller (listen only)
+To map a feature this component doesn't support yet, you can wire the ESP in parallel with the original wall controller (same D+, D- and GND terminals, termination off) and set:
+```
+broan:
+  uart_id: rs485
+  listen_only: true
+```
+In this mode the ESP never transmits. Every register the wall controller writes is logged as `Sniffed write XXYY (known|UNKNOWN): ...`. Change the setting on the wall controller and look for the matching line. Remove `listen_only` (and disconnect the wall controller) to use the ESP as the controller again.
+
 ## FAQ
 Q: I see errors about failed communication
 

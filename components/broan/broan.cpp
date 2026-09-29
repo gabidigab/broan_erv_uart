@@ -262,6 +262,9 @@ void BroanComponent::handleMessage(uint8_t sender, uint8_t target, const std::ve
 #ifdef LISTEN_ONLY
 		case 0x20:
 			break;
+		case 0x40:
+			logRegisterWrites(message);
+			break;
 #endif
 		default:
 		{
@@ -272,6 +275,44 @@ void BroanComponent::handleMessage(uint8_t sender, uint8_t target, const std::ve
 		}
 	}
 }
+
+#ifdef LISTEN_ONLY
+// Decode a write (0x40) sent by another controller on the bus, eg: the wall controller.
+// Format: 0x40 [opHigh opLow len data...]...
+void BroanComponent::logRegisterWrites(const std::vector<uint8_t>& message)
+{
+	size_t i = 1;
+	while( i + 3 <= message.size() )
+	{
+		uint8_t nOpcodeHigh = message[i++];
+		uint8_t nOpcodeLow = message[i++];
+		uint8_t len = message[i++];
+		if( i + len > message.size() )
+		{
+			ESP_LOGW("broan", "Sniffed write: truncated field %02X%02X", nOpcodeHigh, nOpcodeLow);
+			break;
+		}
+
+		const char *pszKnown = lookupFieldIndex(nOpcodeHigh, nOpcodeLow) != INVALID_FIELD ? "known" : "UNKNOWN";
+
+		if( len == 4 )
+		{
+			BroanField_t value;
+			for( size_t b = 0; b < 4; b++ )
+				value.m_value.m_rgBytes[b] = static_cast<char>(message[i+b]);
+			ESP_LOGW("broan", "Sniffed write %02X%02X (%s): float %f / int %i", nOpcodeHigh, nOpcodeLow, pszKnown,
+				value.m_value.m_flValue, value.m_value.m_nValue );
+		}
+		else if( len == 1 )
+			ESP_LOGW("broan", "Sniffed write %02X%02X (%s): byte %02X", nOpcodeHigh, nOpcodeLow, pszKnown, message[i] );
+		else
+			ESP_LOGW("broan", "Sniffed write %02X%02X (%s): %s", nOpcodeHigh, nOpcodeLow, pszKnown,
+				format_hex_pretty(&message[i], len).c_str() );
+
+		i += len;
+	}
+}
+#endif
 
 void BroanComponent::replyIfAllowed()
 {

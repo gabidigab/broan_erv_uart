@@ -346,6 +346,9 @@ private:
 	void replyIfAllowed();
 	void runTasks();
 	void parseBroanFields(const std::vector<uint8_t>& message);
+#ifdef LISTEN_ONLY
+	void logRegisterWrites(const std::vector<uint8_t>& message);
+#endif
 	void writeRegisters( const std::vector<BroanField_t> &values );
 
 	float remap(float flIn, float flInMin, float flInMax, float flOutMin, float flOutMax) {
