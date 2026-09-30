@@ -382,6 +382,7 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 	std::string strBuf;
 	bool bFanStateChanged = false;
 	bool bMediumCFMChanged = false;
+	bool bSetpointsChanged = false;
 
     while (i + 3 <= message.size())
     {
@@ -436,6 +437,14 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 			case BroanField::CFMIn_Medium:
 			case BroanField::CFMOut_Medium:
 				bMediumCFMChanged = true;
+				bSetpointsChanged = true;
+			break;
+
+			case BroanField::CFMIn_Min:
+			case BroanField::CFMOut_Min:
+			case BroanField::CFMIn_Max:
+			case BroanField::CFMOut_Max:
+				bSetpointsChanged = true;
 			break;
 
 #ifdef USE_SENSOR
@@ -636,6 +645,14 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 	if( bFanStateChanged )
 		publishFanState();
+
+	if( bSetpointsChanged )
+	{
+		ESP_LOGI("broan","Flow setpoints (supply / exhaust CFM): min %.0f / %.0f, med %.0f / %.0f, max %.0f / %.0f",
+			m_vecFields[CFMIn_Min].m_value.m_flValue, m_vecFields[CFMOut_Min].m_value.m_flValue,
+			m_vecFields[CFMIn_Medium].m_value.m_flValue, m_vecFields[CFMOut_Medium].m_value.m_flValue,
+			m_vecFields[CFMIn_Max].m_value.m_flValue, m_vecFields[CFMOut_Max].m_value.m_flValue );
+	}
 
 	if( bFanStateChanged || bMediumCFMChanged )
 		enforceAirExchangeMediumCFM();

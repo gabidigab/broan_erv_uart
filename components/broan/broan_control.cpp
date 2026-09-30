@@ -47,6 +47,7 @@ void BroanComponent::pushFanMode( std::vector<BroanField_t> &vecFields, uint8_t 
 	// Air exchange medium runs at the MED setpoints, force them first if configured.
 	if( nMode == BroanFanMode::Manual && !std::isnan( m_flAirExchangeMediumCFM ) )
 	{
+		ESP_LOGI("broan","Air exchange medium: setting %.0f CFM", m_flAirExchangeMediumCFM);
 		vecFields.push_back( m_vecFields[CFMIn_Medium].copyForUpdate( m_flAirExchangeMediumCFM ) );
 		vecFields.push_back( m_vecFields[CFMOut_Medium].copyForUpdate( m_flAirExchangeMediumCFM ) );
 	}
