@@ -37,6 +37,7 @@ Also be aware some RS485 devices will label their pins A and B instead of D+ and
 ## Supported features
 * Setting fan mode: Off, Air Exchange, Intermittent, Intermittent + Recirculate, Turbo, Humidity, Recirculate, Smart. Override is shown when an auxiliary remote forces the ERV, it can't be selected.
 * Setting fan speed (Minimum, Medium, High) for Air Exchange, Recirculate and Intermittent + Recirculate. In other modes the choice is kept and applied when switching to one of these modes. The last choice survives reboots.
+* Intermittent period, in minutes ON per hour (10 to 55, steps of 5)
 * Humidity control mode
 * Intake temperature
 * Filter life left
@@ -112,8 +113,8 @@ select:
 number:
   - platform: broan
 
-    # How many seconds ON per hour in int mode (eg, a value of 20 means the ERV will run
-    # 20 minutes on 40 minutes off every hour )
+    # Minutes ON per hour in intermittent mode, 10 to 55 in steps of 5 (eg, 20 means
+    # the ERV runs 20 minutes and is off 40 minutes every hour)
     intermittent_period:
       name: "Intermittent Period"
 

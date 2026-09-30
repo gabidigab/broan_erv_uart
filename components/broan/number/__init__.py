@@ -7,11 +7,11 @@ from esphome.const import (
     ENTITY_CATEGORY_CONFIG,
     ICON_WATER,
     ICON_TIMER,
+    UNIT_MINUTE,
     UNIT_PERCENT,
 )
 
 UNIT_CFM = "CFM"
-UNIT_PERIOD = "Period"
 
 from .. import CONF_BROAN_ID, BroanComponent, broan_ns
 
@@ -34,7 +34,7 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_INT_PERIOD): number.number_schema(
             IntermittentPeriodNumber,
             entity_category=ENTITY_CATEGORY_CONFIG,
-            unit_of_measurement=UNIT_PERIOD,
+            unit_of_measurement=UNIT_MINUTE,
             icon=ICON_TIMER,
         )
     }
@@ -51,9 +51,10 @@ async def to_code(config):
         await cg.register_parented(h, config[CONF_BROAN_ID])
         cg.add(broan_component.set_humidity_setpoint_number(h))
 
+    # Minutes ON per hour. The ERV stores seconds (02:22).
     if intermittent_period_config := config.get(CONF_INT_PERIOD):
         h = await number.new_number(
-            intermittent_period_config, min_value=10, max_value=50000, step=1
+            intermittent_period_config, min_value=10, max_value=55, step=5
         )
         await cg.register_parented(h, config[CONF_BROAN_ID])
         cg.add(broan_component.set_intermittent_period_number(h))

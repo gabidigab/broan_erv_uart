@@ -274,6 +274,8 @@ void BroanComponent::handleMessage(uint8_t sender, uint8_t target, const std::ve
 			break;
 		case 0x40:
 			logRegisterWrites(message);
+			// Same layout as a read response: reflect what the wall controller sets.
+			parseBroanFields(message);
 			break;
 #endif
 		default:
@@ -500,7 +502,8 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 				if( !intermittent_period_number_ )
 					continue;
 
-				intermittent_period_number_->publish_state(pField->m_value.m_nValue /* / 1000 */ );
+				// Seconds -> minutes per hour. Published as is, even off the 5 minute steps.
+				intermittent_period_number_->publish_state( pField->m_value.m_nValue / 60.f );
 			break;
 #endif
 #ifdef USE_SWITCH

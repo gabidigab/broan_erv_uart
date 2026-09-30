@@ -5,7 +5,8 @@ namespace broan {
 
 void IntermittentPeriodNumber::control(float value)
 {
-	this->parent_->setIntermittentPeriod( value );
+	// Minutes per hour -> seconds
+	this->parent_->setIntermittentPeriod( (uint32_t)lroundf( value * 60.f ) );
 }
 
 }  // namespace broan

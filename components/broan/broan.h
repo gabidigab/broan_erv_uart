@@ -318,7 +318,7 @@ public:
 		{ 0x00, 0x22, BroanFieldType::Int, {0} }, // Unknown. 14400 / 40380000
 		{ 0x07, 0x50, BroanFieldType::Int, {0} }, // Unknown. VTSPEEDW often sets this to -1
 		{ 0x03, 0x20, BroanFieldType::Byte, {0} }, // Unknown. Set to 0 when entering INT mode
-		{ 0x08, 0x20, BroanFieldType::Byte, {0} }, // Unknown. Set to 0 when entering SMART mode, set to 1 in continuous modes. The wall controller also writes 0 on every mode change to recirculation (continuous) and intermittent (VanEE V180H75RT).
+		{ 0x08, 0x20, BroanFieldType::Byte, {0} }, // Unknown. Believed to be 0 when entering SMART mode and 1 in continuous modes, but a VanEE V180H75RT wall controller writes 0x00 after 00:20 on every mode change observed, including continuous air exchange, recirculation and intermittent.
 
 		// Airstream humidity? Needs verification. Broan wiring and parts diagrams for b150e75nt do not list humidity sensors, only the single j7a thermistor. 
 		// May be specific to certain models, this model DOES report changing values on these registers, so I'm suspicious.

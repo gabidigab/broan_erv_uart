@@ -292,13 +292,11 @@ void BroanComponent::setCurrentHumidity( float humidity ) {
 	writeRegisters( vecFields );
 }
 
+// period: seconds ON per hour, as stored in 02:22
 void BroanComponent::setIntermittentPeriod( uint32_t period ) {
 	std::vector<BroanField_t> vecFields;
 
-	// S -> MS
-	//period *= 1000;
-  
-	ESP_LOGI("broan_control", "Set int period: %u", (unsigned)period);
+	ESP_LOGI("broan_control", "Set int period: %us", (unsigned)period);
 
 	vecFields.push_back( m_vecFields[IntModeDuration].copyForUpdate( period ) );
 	m_vecFields[IntModeDuration].markDirty();
