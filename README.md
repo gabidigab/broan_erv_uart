@@ -38,6 +38,7 @@ Also be aware some RS485 devices will label their pins A and B instead of D+ and
 * Setting fan mode: Off, Air Exchange, Intermittent, Intermittent + Recirculate, Turbo, Humidity, Recirculate, Smart. Override is shown when an auxiliary remote forces the ERV, it can't be selected. Like the wall controller, every fan mode write (00:20) is followed by 08:20 = 0x00; without it, Air Exchange Medium runs slower than Minimum on some units.
 * Setting fan speed (Minimum, Medium, High) for Air Exchange, Recirculate and Intermittent + Recirculate. In other modes the choice is kept and applied when switching to one of these modes. The last choice survives reboots.
 * Intermittent period, in minutes ON per hour (10 to 55, steps of 5)
+* Installer defrost mode: Discretion (factory setting, defrost without fan speed change) or Plus (extended defrost for colder regions). Register 12:50, written alone like the wall controller, never automatically.
 * Installer flow setpoints (CFM) for Minimum, Medium and High, supply and exhaust. Like the wall controller, both sides of a speed are written together (supply first), and minimum <= medium <= high is enforced on each side. Values are only written when changed from Home Assistant, never automatically.
 * Humidity control mode
 * Intake temperature
@@ -110,6 +111,9 @@ select:
     # Intermittent + Recirculate
     fan_speed:
       name: "fan speed"
+    # Installer menu: Discretion (factory setting) or Plus (colder regions)
+    defrost_mode:
+      name: "Defrost mode"
 
 number:
   - platform: broan

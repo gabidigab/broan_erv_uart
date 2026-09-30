@@ -278,6 +278,27 @@ void BroanComponent::setFlowSetpoint( uint8_t nSpeed, uint8_t nSide, float flCFM
 	writeRegisters( vecFields );
 }
 
+// Installer menu defrost mode. Like the wall controller, 12:50 is written alone.
+void BroanComponent::setDefrostMode( const std::string &mode )
+{
+	uint8_t value;
+	if( mode == DEFROST_MODE_DISCRETION )
+		value = BroanDefrostMode::DefrostDiscretion;
+	else if( mode == DEFROST_MODE_PLUS )
+		value = BroanDefrostMode::DefrostPlus;
+	else
+	{
+		ESP_LOGW("broan","Unknown defrost mode '%s'", mode.c_str());
+		return;
+	}
+
+	std::vector<BroanField_t> vecFields;
+	vecFields.push_back( m_vecFields[DefrostMode].copyForUpdate( value ) );
+	m_vecFields[DefrostMode].markDirty();
+
+	writeRegisters( vecFields );
+}
+
 // Sends new filter life to ERV in three steps (to mimic wall controller)
 // 1. Write new filter life with FilterLifeStage (09:30)
 // 2. Write FilterReset=1 + filter life in (08:30)

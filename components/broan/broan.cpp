@@ -433,6 +433,23 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 				bFanStateChanged = true;
 			break;
 
+#ifdef USE_SELECT
+			case BroanField::DefrostMode:
+			{
+				if( !defrost_mode_select_ )
+					continue;
+
+				uint8_t nDefrost = pField->m_value.m_chValue;
+				if( nDefrost == BroanDefrostMode::DefrostDiscretion )
+					defrost_mode_select_->publish_state( DEFROST_MODE_DISCRETION );
+				else if( nDefrost == BroanDefrostMode::DefrostPlus )
+					defrost_mode_select_->publish_state( DEFROST_MODE_PLUS );
+				else
+					ESP_LOGW("broan","Unknown defrost mode %02X", nDefrost);
+			}
+			break;
+#endif
+
 			case BroanField::CFMIn_Medium:
 			case BroanField::CFMOut_Medium:
 			case BroanField::CFMIn_Min:

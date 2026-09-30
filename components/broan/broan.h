@@ -80,6 +80,16 @@ enum BroanFanMode
 	Smart = 0x11,
 };
 
+// Values of the DefrostMode register (12:50), from the AI series manual.
+enum BroanDefrostMode
+{
+	DefrostPlus = 0x01,       // Extended defrost for colder regions
+	DefrostDiscretion = 0x02, // Defrost without fan speed change, factory setting
+};
+
+#define DEFROST_MODE_DISCRETION "Discretion"
+#define DEFROST_MODE_PLUS "Plus"
+
 // Speed choice exposed by the fan speed select. Applies to air exchange,
 // recirculation and intermittent + recirculation.
 enum BroanFanSpeed
@@ -116,6 +126,7 @@ enum BroanField
 	IntRecirculate, // Keep right after FanMode so they are polled together
 	IntSpeed,
 	FanModeCommit, // Written right after FanMode, never polled
+	DefrostMode,
 	HumidityControl,
 	IntModeDuration,
 	TargetHumidityA, // Set both to same value per VTSPEEDW
@@ -234,6 +245,7 @@ class BroanComponent : public Component, public uart::UARTDevice
 #ifdef USE_SELECT
 	SUB_SELECT(fan_mode)
 	SUB_SELECT(fan_speed)
+	SUB_SELECT(defrost_mode)
 #endif
 
 #ifdef USE_NUMBER
@@ -278,6 +290,7 @@ public:
 		{ 0x03, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode: recirculate during the off period. 0x00 = off, 0x01 = on
 		{ 0x0E, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode + recirculation speed, for both the exchange and recirculation phases. 0x00 = min, 0x01 = max, 0x02 = med. Wall controller writes 0x00 without recirculation.
 		{ 0x08, 0x20, BroanFieldType::Byte, {0}, UPDATE_RATE_NEVER }, // Meaning unknown. A VanEE V180H75RT wall controller writes 0x00 right after 00:20 on every mode change (air exchange, recirculation, intermittent). Without it, air exchange medium (0x0B) runs slower than minimum, so we mimic it.
+		{ 0x12, 0x50, BroanFieldType::Byte, {0}, UPDATE_RATE_SLOW }, // Defrost mode (installer menu), see BroanDefrostMode. The wall controller writes it alone.
 		{ 0x0F, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_SLOW }, // Humidity control on/off
 		{ 0x02, 0x22, BroanFieldType::Int, {0}, UPDATE_RATE_SLOW }, // INT mode on time (seconds, OFF time will be what remains of an hour)
 		{ 0x0C, 0x22, BroanFieldType::Float, {0}, UPDATE_RATE_SLOW }, // Target humidity?
@@ -365,6 +378,7 @@ public:
 	void setFanSpeed( const std::string &speed );
 	void setFanSpeedCFM( BroanFanMode mode, BroanCFMMode direction, float flTargetCFM );
 	void setFlowSetpoint( uint8_t nSpeed, uint8_t nSide, float flCFM );
+	void setDefrostMode( const std::string &mode );
 	void resetFilter();
 	void setHumidityControl( bool enable );
 	void setHumiditySetpoint( float humidity );

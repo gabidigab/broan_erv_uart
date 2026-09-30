@@ -27,6 +27,9 @@ select:
       name: "Fan Mode"
     fan_speed:
       name: "Fan Speed"
+    # Installer menu, shown with the flow setpoints in the Configuration section
+    defrost_mode:
+      name: "Defrost Mode"
 
 number:
   - platform: broan
