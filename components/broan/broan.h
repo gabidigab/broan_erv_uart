@@ -296,7 +296,7 @@ public:
 		// Control
 		{ 0x00, 0x20, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // FanMode
 		{ 0x03, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode: recirculate during the off period. 0x00 = off, 0x01 = on
-		{ 0x0E, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode speed. 0x00 = min, 0x01 = max, 0x02 = med. With recirculation (03:22 = 0x01) it applies to both the exchange and recirculation phases (confirmed on a VanEE V180H75RT). Without recirculation the wall controller offers no speed and writes 0x00; we send the selected speed anyway, experimental, to validate on the ERV.
+		{ 0x0E, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode speed, with or without recirculation (03:22). 0x00 = min, 0x01 = max, 0x02 = med. Applies to both the exchange and recirculation phases. Captured from the wall controller for the three speeds in both intermittent modes (VanEE V180H75RT), and applied by the ERV.
 		{ 0x08, 0x20, BroanFieldType::Byte, {0}, UPDATE_RATE_NEVER }, // Meaning unknown. A VanEE V180H75RT wall controller writes 0x00 right after 00:20 on every mode change (air exchange, recirculation, intermittent). Without it, air exchange medium (0x0B) runs slower than minimum, so we mimic it.
 		{ 0x12, 0x50, BroanFieldType::Byte, {0}, UPDATE_RATE_SLOW }, // Defrost mode (installer menu), see BroanDefrostMode. The wall controller writes it alone.
 
@@ -351,6 +351,9 @@ public:
 		{ 0x01, 0x00, BroanFieldType::String,  {0}, UPDATE_RATE_ONCE }, // Firmware Version
 		{ 0x01, 0x60, BroanFieldType::String,  {0}, UPDATE_RATE_ONCE }, // Hardware Revision
 /*
+		// Read by the wall controller right after it writes 00:20 = 0x08 (VanEE V180H75RT), never written:
+		{ 0x01, 0x20, BroanFieldType::Byte, {0} }, // 0x08. Probably the fan mode actually applied by the ERV.
+
 		// Also read by the wall controller in the installer menu (VanEE V180H75RT), role unknown, never written:
 		{ 0x0D, 0x50, BroanFieldType::Float, {0} }, // 140.0 then 142.0: follows the maximum setpoint (0E:50) - 10.
 		{ 0x10, 0x50, BroanFieldType::Float, {0} }, // 90.0, equal to the minimum setpoint (0A:50). To confirm.

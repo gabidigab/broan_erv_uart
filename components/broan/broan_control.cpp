@@ -22,8 +22,6 @@ std::vector<BroanField_t> BroanComponent::fanModeFields( const std::string &mode
 	}
 	else if( mode == FAN_MODE_INTERMITTENT )
 	{
-		// The wall controller writes 0E:22 = 0x00 here and offers no speed. Sending the
-		// selected speed is an experiment, to validate on the ERV.
 		vecFields.push_back( m_vecFields[IntRecirculate].copyForUpdate( (uint8_t)0x00 ) );
 		vecFields.push_back( m_vecFields[IntSpeed].copyForUpdate( g_rgIntSpeeds[nSpeed] ) );
 		value = BroanFanMode::Intermittent;
