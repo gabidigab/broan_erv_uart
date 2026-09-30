@@ -267,6 +267,11 @@ void BroanComponent::handleMessage(uint8_t sender, uint8_t target, const std::ve
 		case 0x21:
 		{
 			// Request register response
+#ifdef LISTEN_ONLY
+			// Reads from the wall controller, answered by the ERV. It polls in a loop,
+			// so only log new fields and changed values.
+			logSniffedFields(message, "read", true);
+#endif
 			parseBroanFields(message);
 			m_bExpectingReply = false;
 
@@ -276,7 +281,7 @@ void BroanComponent::handleMessage(uint8_t sender, uint8_t target, const std::ve
 		case 0x20:
 			break;
 		case 0x40:
-			logRegisterWrites(message);
+			logSniffedFields(message, "write", false);
 			// Same layout as a read response: reflect what the wall controller sets.
 			parseBroanFields(message);
 			break;
@@ -292,9 +297,11 @@ void BroanComponent::handleMessage(uint8_t sender, uint8_t target, const std::ve
 }
 
 #ifdef LISTEN_ONLY
-// Decode a write (0x40) sent by another controller on the bus, eg: the wall controller.
-// Format: 0x40 [opHigh opLow len data...]...
-void BroanComponent::logRegisterWrites(const std::vector<uint8_t>& message)
+// Decode a write (0x40) sent by another controller on the bus, eg: the wall controller,
+// or the ERV's answer (0x21) to that controller's reads.
+// Format: 0x40|0x21 [opHigh opLow len data...]...
+// bOnlyChanges: skip fields already logged with the same value.
+void BroanComponent::logSniffedFields(const std::vector<uint8_t>& message, const char *pszWhat, bool bOnlyChanges)
 {
 	size_t i = 1;
 	while( i + 3 <= message.size() )
@@ -304,8 +311,21 @@ void BroanComponent::logRegisterWrites(const std::vector<uint8_t>& message)
 		uint8_t len = message[i++];
 		if( i + len > message.size() )
 		{
-			ESP_LOGW("broan", "Sniffed write: truncated field %02X%02X", nOpcodeHigh, nOpcodeLow);
+			ESP_LOGW("broan", "Sniffed %s: truncated field %02X%02X", pszWhat, nOpcodeHigh, nOpcodeLow);
 			break;
+		}
+
+		if( bOnlyChanges )
+		{
+			uint16_t nOpcode = ( nOpcodeHigh << 8 ) | nOpcodeLow;
+			std::vector<uint8_t> vecValue( message.begin() + i, message.begin() + i + len );
+			auto it = m_mapSniffedReads.find( nOpcode );
+			if( it != m_mapSniffedReads.end() && it->second == vecValue )
+			{
+				i += len;
+				continue;
+			}
+			m_mapSniffedReads[nOpcode] = vecValue;
 		}
 
 		const char *pszKnown = lookupFieldIndex(nOpcodeHigh, nOpcodeLow) != INVALID_FIELD ? "known" : "UNKNOWN";
@@ -315,13 +335,13 @@ void BroanComponent::logRegisterWrites(const std::vector<uint8_t>& message)
 			BroanField_t value;
 			for( size_t b = 0; b < 4; b++ )
 				value.m_value.m_rgBytes[b] = static_cast<char>(message[i+b]);
-			ESP_LOGW("broan", "Sniffed write %02X%02X (%s): float %f / int %i", nOpcodeHigh, nOpcodeLow, pszKnown,
+			ESP_LOGW("broan", "Sniffed %s %02X%02X (%s): float %f / int %i", pszWhat, nOpcodeHigh, nOpcodeLow, pszKnown,
 				value.m_value.m_flValue, (int)value.m_value.m_nValue );
 		}
 		else if( len == 1 )
-			ESP_LOGW("broan", "Sniffed write %02X%02X (%s): byte %02X", nOpcodeHigh, nOpcodeLow, pszKnown, message[i] );
+			ESP_LOGW("broan", "Sniffed %s %02X%02X (%s): byte %02X", pszWhat, nOpcodeHigh, nOpcodeLow, pszKnown, message[i] );
 		else
-			ESP_LOGW("broan", "Sniffed write %02X%02X (%s): %s", nOpcodeHigh, nOpcodeLow, pszKnown,
+			ESP_LOGW("broan", "Sniffed %s %02X%02X (%s): %s", pszWhat, nOpcodeHigh, nOpcodeLow, pszKnown,
 				format_hex_pretty(&message[i], len).c_str() );
 
 		i += len;
