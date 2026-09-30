@@ -3,63 +3,190 @@
 namespace esphome {
 namespace broan {
 
-void BroanComponent::setFanMode( std::string mode )
+// Fields to write to enter a fan mode, in the order the wall controller sends them.
+// Empty if the mode can't be set (Override, unknown).
+std::vector<BroanField_t> BroanComponent::fanModeFields( const std::string &mode, uint8_t nSpeed )
 {
-	uint8_t value = 0x01;
-
-	if( mode == "min")
-		value = BroanFanMode::Min;
-	else if (mode == "max" )
-		value = BroanFanMode::Max;
-	else if( mode == "manual" )
-		value = BroanFanMode::Manual;
-	else if( mode == "int" )
-		value = BroanFanMode::Intermittent;
-	else if( mode == "turbo" )
-		value = BroanFanMode::Turbo;
-	else if( mode == "humidity" )
-		value = BroanFanMode::Humidity;
-	else if( mode == "recirculate" )
-		value = BroanFanMode::Recirculate;
-	else if( mode == "smart" )
-		value = BroanFanMode::Smart;
-	else
-		value = BroanFanMode::Off;
-
-
 	std::vector<BroanField_t> vecFields;
+	uint8_t value;
+
+	if( mode == FAN_MODE_AIR_EXCHANGE )
+		value = g_rgAirExchangeModes[nSpeed];
+	else if( mode == FAN_MODE_RECIRCULATE )
+		value = g_rgRecirculateModes[nSpeed];
+	else if( mode == FAN_MODE_INTERMITTENT_RECIRCULATE )
+	{
+		vecFields.push_back( m_vecFields[IntRecirculate].copyForUpdate( (uint8_t)0x01 ) );
+		vecFields.push_back( m_vecFields[IntSpeed].copyForUpdate( g_rgIntSpeeds[nSpeed] ) );
+		value = BroanFanMode::Intermittent;
+	}
+	else if( mode == FAN_MODE_INTERMITTENT )
+	{
+		vecFields.push_back( m_vecFields[IntRecirculate].copyForUpdate( (uint8_t)0x00 ) );
+		vecFields.push_back( m_vecFields[IntSpeed].copyForUpdate( (uint8_t)0x00 ) );
+		value = BroanFanMode::Intermittent;
+	}
+	else if( mode == FAN_MODE_TURBO )
+		value = BroanFanMode::Turbo;
+	else if( mode == FAN_MODE_HUMIDITY )
+		value = BroanFanMode::Humidity;
+	else if( mode == FAN_MODE_SMART )
+		value = BroanFanMode::Smart;
+	else if( mode == FAN_MODE_OFF )
+		value = BroanFanMode::Off;
+	else
+		return vecFields;
+
 	vecFields.push_back( m_vecFields[FanMode].copyForUpdate( value ) );
-
-	m_vecFields[FanMode].markDirty();
-
-	writeRegisters( vecFields );
-
+	return vecFields;
 }
 
-void BroanComponent::setFanSpeed( float input )
+void BroanComponent::setFanMode( const std::string &mode )
 {
-	//return;
-	float flMin = m_vecFields[CFMIn_Min].m_value.m_flValue;
-	float flMax = m_vecFields[CFMIn_Max].m_value.m_flValue;
-	if( flMin == 0 || flMax == 0 )
+	std::vector<BroanField_t> vecFields = fanModeFields( mode, m_nFanSpeed );
+	if( vecFields.empty() )
 	{
-		ESP_LOGE("broan","Failed to set fan speed: Invalid min/max state");
+		ESP_LOGW("broan","Fan mode '%s' can't be set", mode.c_str());
+		// Put the select back on the ERV's actual mode
+		publishFanState();
 		return;
 	}
-	float value = remap( input, 0.f, 100.f, flMin, flMax );
 
-	std::vector<BroanField_t> vecFields;
-
-	vecFields.push_back( m_vecFields[CFMIn_Medium].copyForUpdate( value ) );
-	vecFields.push_back( m_vecFields[CFMOut_Medium].copyForUpdate( value ) );
-
-	m_vecFields[CFMIn_Medium].markDirty();
-	m_vecFields[CFMOut_Medium].markDirty();
+	for( const BroanField_t &field : vecFields )
+		lookupField( field.m_nOpcodeHigh, field.m_nOpcodeLow )->markDirty();
 
 	writeRegisters( vecFields );
-
 }
 
+void BroanComponent::setFanSpeed( const std::string &speed )
+{
+	uint8_t nSpeed = BroanFanSpeed::MAX_FAN_SPEEDS;
+	for( uint8_t i=0; i<BroanFanSpeed::MAX_FAN_SPEEDS; i++ )
+	{
+		if( speed == g_rgFanSpeedNames[i] )
+			nSpeed = i;
+	}
+
+	if( nSpeed == BroanFanSpeed::MAX_FAN_SPEEDS )
+	{
+		ESP_LOGW("broan","Unknown fan speed '%s'", speed.c_str());
+		return;
+	}
+
+	storeFanSpeed( nSpeed );
+
+	// Only apply the speed to modes that use it, otherwise keep it for later.
+	std::vector<BroanField_t> vecFields;
+	uint8_t nMode = m_vecFields[FanMode].m_value.m_chValue;
+	if( nMode >= BroanFanMode::RecirculateMin && nMode <= BroanFanMode::RecirculateMed )
+		vecFields.push_back( m_vecFields[FanMode].copyForUpdate( g_rgRecirculateModes[nSpeed] ) );
+	else if( nMode >= BroanFanMode::Min && nMode <= BroanFanMode::Manual )
+		vecFields.push_back( m_vecFields[FanMode].copyForUpdate( g_rgAirExchangeModes[nSpeed] ) );
+	else if( nMode == BroanFanMode::Intermittent && m_vecFields[IntRecirculate].m_value.m_chValue == 0x01 )
+		vecFields.push_back( m_vecFields[IntSpeed].copyForUpdate( g_rgIntSpeeds[nSpeed] ) );
+
+	if( vecFields.empty() )
+	{
+#ifdef USE_SELECT
+		if( fan_speed_select_ )
+			fan_speed_select_->publish_state( g_rgFanSpeedNames[m_nFanSpeed] );
+#endif
+		return;
+	}
+
+	for( const BroanField_t &field : vecFields )
+		lookupField( field.m_nOpcodeHigh, field.m_nOpcodeLow )->markDirty();
+
+	writeRegisters( vecFields );
+}
+
+void BroanComponent::storeFanSpeed( uint8_t nSpeed )
+{
+	if( nSpeed == m_nFanSpeed )
+		return;
+
+	m_nFanSpeed = nSpeed;
+	m_prefFanSpeed.save( &m_nFanSpeed );
+}
+
+// Split the ERV state (FanMode, IntRecirculate, IntSpeed) into the mode and speed selects.
+void BroanComponent::publishFanState()
+{
+	uint8_t nMode = m_vecFields[FanMode].m_value.m_chValue;
+	if( nMode == 0 )
+		return; // Not read yet
+
+	const char *pszMode = nullptr;
+	int nSpeed = -1;
+
+	switch( nMode )
+	{
+		case BroanFanMode::Off: pszMode = FAN_MODE_OFF; break;
+		case BroanFanMode::Ovr: pszMode = FAN_MODE_OVERRIDE; break;
+		case BroanFanMode::Turbo: pszMode = FAN_MODE_TURBO; break;
+		case BroanFanMode::Humidity: pszMode = FAN_MODE_HUMIDITY; break;
+		case BroanFanMode::Smart: pszMode = FAN_MODE_SMART; break;
+
+		case BroanFanMode::Intermittent:
+		{
+			uint8_t nRecirculate = m_vecFields[IntRecirculate].m_value.m_chValue;
+			uint8_t nIntSpeed = m_vecFields[IntSpeed].m_value.m_chValue;
+
+			if( nRecirculate == 0x00 )
+			{
+				pszMode = FAN_MODE_INTERMITTENT;
+				break;
+			}
+
+			if( nRecirculate != 0x01 )
+			{
+				ESP_LOGW("broan","Unknown intermittent recirculation value %02X", nRecirculate);
+				break;
+			}
+
+			pszMode = FAN_MODE_INTERMITTENT_RECIRCULATE;
+			for( int i=0; i<BroanFanSpeed::MAX_FAN_SPEEDS; i++ )
+			{
+				if( g_rgIntSpeeds[i] == nIntSpeed )
+					nSpeed = i;
+			}
+
+			if( nSpeed < 0 )
+				ESP_LOGW("broan","Unknown intermittent speed %02X", nIntSpeed);
+		}
+		break;
+
+		default:
+			for( int i=0; i<BroanFanSpeed::MAX_FAN_SPEEDS; i++ )
+			{
+				if( g_rgAirExchangeModes[i] == nMode )
+				{
+					pszMode = FAN_MODE_AIR_EXCHANGE;
+					nSpeed = i;
+				}
+				else if( g_rgRecirculateModes[i] == nMode )
+				{
+					pszMode = FAN_MODE_RECIRCULATE;
+					nSpeed = i;
+				}
+			}
+
+			if( !pszMode )
+				ESP_LOGW("broan","Unknown fan mode %02X", nMode);
+		break;
+	}
+
+	if( nSpeed >= 0 )
+		storeFanSpeed( nSpeed );
+
+#ifdef USE_SELECT
+	if( pszMode && fan_mode_select_ )
+		fan_mode_select_->publish_state( pszMode );
+
+	if( fan_speed_select_ )
+		fan_speed_select_->publish_state( g_rgFanSpeedNames[m_nFanSpeed] );
+#endif
+}
 
 void BroanComponent::setFanSpeedCFM( BroanFanMode mode, BroanCFMMode direction, float flTargetCFM )
 {
@@ -171,7 +298,7 @@ void BroanComponent::setIntermittentPeriod( uint32_t period ) {
 	// S -> MS
 	//period *= 1000;
   
-	ESP_LOGI("broan_control", "Set int period: %i", period);
+	ESP_LOGI("broan_control", "Set int period: %u", (unsigned)period);
 
 	vecFields.push_back( m_vecFields[IntModeDuration].copyForUpdate( period ) );
 	m_vecFields[IntModeDuration].markDirty();

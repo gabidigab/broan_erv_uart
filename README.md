@@ -35,8 +35,8 @@ Some rs485 trancevers have a jumper for the terminating resistor, some do not. I
 Also be aware some RS485 devices will label their pins A and B instead of D+ and D-. Somewhat confusingly, A is D- and B is D+
 
 ## Supported features
-* Setting fan mode (Standby, Min, Max, Intermittent, Turbo, Override, and Med, which is treated as manual control)
-* Setting fan speed in manual mode
+* Setting fan mode: Off, Air Exchange, Intermittent, Intermittent + Recirculate, Turbo, Humidity, Recirculate, Smart. Override is shown when an auxiliary remote forces the ERV, it can't be selected.
+* Setting fan speed (Minimum, Medium, High) for Air Exchange, Recirculate and Intermittent + Recirculate. In other modes the choice is kept and applied when switching to one of these modes. The last choice survives reboots.
 * Humidity control mode
 * Intake temperature
 * Filter life left
@@ -100,16 +100,17 @@ broan:
 
 select:
   - platform: broan
+    # Off, Air Exchange, Intermittent, Intermittent + Recirculate, Turbo, Humidity,
+    # Recirculate, Smart, Override (read only)
     fan_mode:
       name: "fan mode"
+    # Minimum, Medium, High. Used by Air Exchange, Recirculate and
+    # Intermittent + Recirculate
+    fan_speed:
+      name: "fan speed"
 
 number:
   - platform: broan
-
-    # Speed as a ratio of min vs max speed. Eg, if your MIN is 20 CFM and your MAX is 
-    # 40 CFM, 50% means medium rill be at 30 CFM
-    fan_speed:
-      name: "fan speed"
 
     # How many seconds ON per hour in int mode (eg, a value of 20 means the ERV will run
     # 20 minutes on 40 minutes off every hour )

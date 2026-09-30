@@ -25,11 +25,11 @@ select:
   - platform: broan
     fan_mode:
       name: "Fan Mode"
+    fan_speed:
+      name: "Fan Speed"
 
 number:
   - platform: broan
-    fan_speed:
-      name: "Fan Speed"
     humidity_setpoint:          # set the desired humidity level
       name: "Humidity Setpoint"
 
