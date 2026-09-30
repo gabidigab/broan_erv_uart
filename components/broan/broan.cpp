@@ -381,6 +381,7 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 	std::string strBuf;
 	bool bFanStateChanged = false;
+	bool bMediumCFMChanged = false;
 
     while (i + 3 <= message.size())
     {
@@ -430,6 +431,11 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 			case BroanField::IntRecirculate:
 			case BroanField::IntSpeed:
 				bFanStateChanged = true;
+			break;
+
+			case BroanField::CFMIn_Medium:
+			case BroanField::CFMOut_Medium:
+				bMediumCFMChanged = true;
 			break;
 
 #ifdef USE_SENSOR
@@ -630,6 +636,9 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 	if( bFanStateChanged )
 		publishFanState();
+
+	if( bFanStateChanged || bMediumCFMChanged )
+		enforceAirExchangeMediumCFM();
 }
 
 void BroanComponent::handleUnknownField(uint32_t nOpcodeHigh, uint32_t nOpcodeLow, uint8_t len, uint32_t i, const std::vector<uint8_t>& message )

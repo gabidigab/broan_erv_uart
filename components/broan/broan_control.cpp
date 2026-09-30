@@ -44,6 +44,13 @@ std::vector<BroanField_t> BroanComponent::fanModeFields( const std::string &mode
 // Like the wall controller: every FanMode write is followed by 08:20 = 0x00.
 void BroanComponent::pushFanMode( std::vector<BroanField_t> &vecFields, uint8_t nMode )
 {
+	// Air exchange medium runs at the MED setpoints, force them first if configured.
+	if( nMode == BroanFanMode::Manual && !std::isnan( m_flAirExchangeMediumCFM ) )
+	{
+		vecFields.push_back( m_vecFields[CFMIn_Medium].copyForUpdate( m_flAirExchangeMediumCFM ) );
+		vecFields.push_back( m_vecFields[CFMOut_Medium].copyForUpdate( m_flAirExchangeMediumCFM ) );
+	}
+
 	vecFields.push_back( m_vecFields[FanMode].copyForUpdate( nMode ) );
 	vecFields.push_back( m_vecFields[FanModeCommit].copyForUpdate( (uint8_t)0x00 ) );
 }
@@ -104,6 +111,37 @@ void BroanComponent::setFanSpeed( const std::string &speed )
 	for( const BroanField_t &field : vecFields )
 		lookupField( field.m_nOpcodeHigh, field.m_nOpcodeLow )->markDirty();
 
+	writeRegisters( vecFields );
+}
+
+// Put the MED setpoints back to air_exchange_medium_cfm if the ERV reports
+// something else while in air exchange medium (eg: after a power cycle).
+void BroanComponent::enforceAirExchangeMediumCFM()
+{
+	if( std::isnan( m_flAirExchangeMediumCFM ) || (uint8_t)m_vecFields[FanMode].m_value.m_chValue != BroanFanMode::Manual )
+		return;
+
+	float flIn = m_vecFields[CFMIn_Medium].m_value.m_flValue;
+	float flOut = m_vecFields[CFMOut_Medium].m_value.m_flValue;
+	if( flIn == 0.f || flOut == 0.f )
+		return; // Not read yet
+
+	if( fabsf( flIn - m_flAirExchangeMediumCFM ) < 0.5f && fabsf( flOut - m_flAirExchangeMediumCFM ) < 0.5f )
+		return;
+
+	// Don't hammer the ERV if it refuses the value
+	uint32_t unNow = millis();
+	if( m_unLastMediumCFMFix != 0 && unNow - m_unLastMediumCFMFix < 60000 )
+		return;
+	m_unLastMediumCFMFix = unNow;
+
+	ESP_LOGW("broan","Air exchange medium at %.0f / %.0f CFM, setting %.0f", flIn, flOut, m_flAirExchangeMediumCFM);
+
+	std::vector<BroanField_t> vecFields;
+	vecFields.push_back( m_vecFields[CFMIn_Medium].copyForUpdate( m_flAirExchangeMediumCFM ) );
+	vecFields.push_back( m_vecFields[CFMOut_Medium].copyForUpdate( m_flAirExchangeMediumCFM ) );
+	m_vecFields[CFMIn_Medium].markDirty();
+	m_vecFields[CFMOut_Medium].markDirty();
 	writeRegisters( vecFields );
 }
 
