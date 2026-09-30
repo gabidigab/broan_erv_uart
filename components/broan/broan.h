@@ -127,6 +127,12 @@ enum BroanField
 	IntSpeed,
 	FanModeCommit, // Written right after FanMode, never polled
 	DefrostMode,
+
+	// Flow limits (installer menu), read only
+	FlowLimitLow,
+	FlowLimitHigh,
+	MaxSupplyCFM,
+	MaxExhaustCFM,
 	HumidityControl,
 	IntModeDuration,
 	TargetHumidityA, // Set both to same value per VTSPEEDW
@@ -240,6 +246,8 @@ class BroanComponent : public Component, public uart::UARTDevice
 	SUB_SENSOR(exhaust_cfm)
 	SUB_SENSOR(supply_rpm)
 	SUB_SENSOR(exhaust_rpm)
+	SUB_SENSOR(max_supply_cfm)
+	SUB_SENSOR(max_exhaust_cfm)
 #endif
 
 #ifdef USE_SELECT
@@ -291,6 +299,12 @@ public:
 		{ 0x0E, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode + recirculation speed, for both the exchange and recirculation phases. 0x00 = min, 0x01 = max, 0x02 = med. Wall controller writes 0x00 without recirculation.
 		{ 0x08, 0x20, BroanFieldType::Byte, {0}, UPDATE_RATE_NEVER }, // Meaning unknown. A VanEE V180H75RT wall controller writes 0x00 right after 00:20 on every mode change (air exchange, recirculation, intermittent). Without it, air exchange medium (0x0B) runs slower than minimum, so we mimic it.
 		{ 0x12, 0x50, BroanFieldType::Byte, {0}, UPDATE_RATE_SLOW }, // Defrost mode (installer menu), see BroanDefrostMode. The wall controller writes it alone.
+
+		// Flow limits, read by the wall controller when opening the installer menu (VanEE V180H75RT). Never written.
+		{ 0x0C, 0x50, BroanFieldType::Float, {0}, UPDATE_RATE_SLOW }, // Lowest flow setpoint allowed. 65.0 (datasheet minimum). The wall controller accepts 65 and refuses below.
+		{ 0x11, 0x50, BroanFieldType::Float, {0}, UPDATE_RATE_SLOW }, // Highest flow setpoint allowed. 152.52, same as 17:10. The wall controller accepts 152 and refuses above.
+		{ 0x16, 0x10, BroanFieldType::Float, {0}, UPDATE_RATE_SLOW }, // Probably the highest supply flow reachable, measured by auto balancing (Virtuo). 163.37. Same group as 05:10 / 06:10.
+		{ 0x17, 0x10, BroanFieldType::Float, {0}, UPDATE_RATE_SLOW }, // Probably the highest exhaust flow reachable, measured by auto balancing. 152.52.
 		{ 0x0F, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_SLOW }, // Humidity control on/off
 		{ 0x02, 0x22, BroanFieldType::Int, {0}, UPDATE_RATE_SLOW }, // INT mode on time (seconds, OFF time will be what remains of an hour)
 		{ 0x0C, 0x22, BroanFieldType::Float, {0}, UPDATE_RATE_SLOW }, // Target humidity?
@@ -337,6 +351,14 @@ public:
 		{ 0x01, 0x00, BroanFieldType::String,  {0}, UPDATE_RATE_ONCE }, // Firmware Version
 		{ 0x01, 0x60, BroanFieldType::String,  {0}, UPDATE_RATE_ONCE }, // Hardware Revision
 /*
+		// Also read by the wall controller in the installer menu (VanEE V180H75RT), role unknown, never written:
+		{ 0x0D, 0x50, BroanFieldType::Float, {0} }, // 140.0 then 142.0: follows the maximum setpoint (0E:50) - 10.
+		{ 0x10, 0x50, BroanFieldType::Float, {0} }, // 90.0, equal to the minimum setpoint (0A:50). To confirm.
+		{ 0x17, 0x50, BroanFieldType::Float, {0} }, // 150.0.
+		{ 0x18, 0x50, BroanFieldType::Float, {0} }, // 150.0.
+		{ 0x04, 0x22, BroanFieldType::Float, {0} }, // 114.8.
+		{ 0x16, 0x50, BroanFieldType::Byte, {0} }, // 0x00.
+
 		// Unknown fields scanned by the VTSPEEDW
 		{ 0x02, 0x30, BroanFieldType::Byte, {0}, UPDATE_RATE_SLOW }, // Unknown. 1. Set to 0 in TURBO mode
 		{ 0x0A, 0x22, BroanFieldType::Float, {0} }, // Unknown. 40 / 00002042

@@ -39,7 +39,8 @@ Also be aware some RS485 devices will label their pins A and B instead of D+ and
 * Setting fan speed (Minimum, Medium, High) for Air Exchange, Recirculate and Intermittent + Recirculate. In other modes the choice is kept and applied when switching to one of these modes. The last choice survives reboots.
 * Intermittent period, in minutes ON per hour (10 to 55, steps of 5)
 * Installer defrost mode: Discretion (factory setting, defrost without fan speed change) or Plus (extended defrost for colder regions). Register 12:50, written alone like the wall controller, never automatically.
-* Installer flow setpoints (CFM) for Minimum, Medium and High, supply and exhaust. Like the wall controller, both sides of a speed are written together (supply first), and minimum <= medium <= high is enforced on each side. Values are only written when changed from Home Assistant, never automatically.
+* Installer flow setpoints (CFM) for Minimum, Medium and High, supply and exhaust. Like the wall controller, both sides of a speed are written together (supply first), and minimum <= medium <= high is enforced on each side. Values are only written when changed from Home Assistant, never automatically. Like the wall controller, values outside the ERV's own limits (lowest 0C:50, highest 11:50, eg 65 to 152.52 CFM) are refused; until those are read, the entity range applies.
+* Highest flows reachable, measured by auto balancing (16:10 supply, 17:10 exhaust), as diagnostic sensors
 * Humidity control mode
 * Intake temperature
 * Filter life left
@@ -123,7 +124,8 @@ number:
     intermittent_period:
       name: "Intermittent Period"
 
-    # Installer flow setpoints, in CFM (entry box, step 1). Default range 65 to 193
+    # Installer flow setpoints, in CFM (entry box, step 1). Values outside the ERV's
+    # limits (0C:50 / 11:50) are refused, like the wall controller. Default range 65 to 193
     # (VanEE V180H75RT datasheet), change it with min_value / max_value.
     # Registers: minimum 0A:50 / 0B:50, medium 06:22 / 08:22, high 0E:50 / 0F:50.
     minimum_supply_flow:
@@ -142,6 +144,11 @@ number:
 
 sensor:
   - platform: broan
+    # Highest flows reachable, measured by auto balancing (diagnostic)
+    max_supply_fan_cfm:
+      name: "Max reachable supply flow"
+    max_exhaust_fan_cfm:
+      name: "Max reachable exhaust flow"
     # As reported by the ERV, in watts
     power:
       name: Power draw

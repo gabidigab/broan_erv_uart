@@ -11,6 +11,7 @@ from esphome.const import (
     ICON_THERMOMETER,
     ICON_AIR_FILTER,
     ICON_FAN,
+    STATE_CLASS_MEASUREMENT,
     UNIT_WATT,
     UNIT_CELSIUS,
 )
@@ -21,6 +22,8 @@ CONF_SUPPLY_CFM = "supply_fan_cfm"
 CONF_EXHAUST_CFM = "exhaust_fan_cfm"
 CONF_SUPPLY_RPM = "supply_fan_rpm"
 CONF_EXHAUST_RPM = "exhaust_fan_rpm"
+CONF_MAX_SUPPLY_CFM = "max_supply_fan_cfm"
+CONF_MAX_EXHAUST_CFM = "max_exhaust_fan_cfm"
 CONF_FAULT_CODE = "fault_code"
 CONF_WARNING_CODE = "warning_code"
 CONF_BASE_MODE_CODE = "base_mode_code"
@@ -71,6 +74,22 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_EXHAUST_RPM): sensor.sensor_schema(
             icon=ICON_FAN,
             unit_of_measurement=UNIT_RPM,
+        ),
+
+        # Highest flow reachable, measured by auto balancing (16:10 / 17:10)
+        cv.Optional(CONF_MAX_SUPPLY_CFM): sensor.sensor_schema(
+            icon=ICON_FAN,
+            unit_of_measurement=UNIT_CFM,
+            accuracy_decimals=1,
+            state_class=STATE_CLASS_MEASUREMENT,
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(CONF_MAX_EXHAUST_CFM): sensor.sensor_schema(
+            icon=ICON_FAN,
+            unit_of_measurement=UNIT_CFM,
+            accuracy_decimals=1,
+            state_class=STATE_CLASS_MEASUREMENT,
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
         ),
 
         # Info / Diagnostic
@@ -125,6 +144,14 @@ async def to_code(config):
     if exhaust_rpm_config := config.get(CONF_EXHAUST_RPM):
         sens = await sensor.new_sensor(exhaust_rpm_config)
         cg.add(broan_component.set_exhaust_rpm_sensor(sens))
+
+    if max_supply_cfm_config := config.get(CONF_MAX_SUPPLY_CFM):
+        sens = await sensor.new_sensor(max_supply_cfm_config)
+        cg.add(broan_component.set_max_supply_cfm_sensor(sens))
+
+    if max_exhaust_cfm_config := config.get(CONF_MAX_EXHAUST_CFM):
+        sens = await sensor.new_sensor(max_exhaust_cfm_config)
+        cg.add(broan_component.set_max_exhaust_cfm_sensor(sens))
 
     if fault_code_config := config.get(CONF_FAULT_CODE):
         sens = await sensor.new_sensor(fault_code_config)
