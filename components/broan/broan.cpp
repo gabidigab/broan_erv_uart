@@ -472,6 +472,8 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 			case BroanField::CFMIn_Medium:
 			case BroanField::CFMOut_Medium:
+			case BroanField::FlowLimitLow:
+			case BroanField::FlowLimitHigh:
 			case BroanField::CFMIn_Min:
 			case BroanField::CFMOut_Min:
 			case BroanField::CFMIn_Max:
@@ -500,6 +502,20 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 					continue;
 
 				temperature_sensor_->publish_state(pField->m_value.m_flValue);
+			break;
+
+			case BroanField::MaxSupplyCFM:
+				if( !max_supply_cfm_sensor_ )
+					continue;
+
+				max_supply_cfm_sensor_->publish_state(pField->m_value.m_flValue);
+			break;
+
+			case BroanField::MaxExhaustCFM:
+				if( !max_exhaust_cfm_sensor_ )
+					continue;
+
+				max_exhaust_cfm_sensor_->publish_state(pField->m_value.m_flValue);
 			break;
 
 			case BroanField::SupplyCFM:
@@ -693,10 +709,11 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 		}
 #endif
 
-		ESP_LOGI("broan","Flow setpoints (supply / exhaust CFM): min %.0f / %.0f, med %.0f / %.0f, max %.0f / %.0f",
+		ESP_LOGI("broan","Flow setpoints (supply / exhaust CFM): min %.0f / %.0f, med %.0f / %.0f, max %.0f / %.0f, limits %.2f to %.2f",
 			m_vecFields[CFMIn_Min].m_value.m_flValue, m_vecFields[CFMOut_Min].m_value.m_flValue,
 			m_vecFields[CFMIn_Medium].m_value.m_flValue, m_vecFields[CFMOut_Medium].m_value.m_flValue,
-			m_vecFields[CFMIn_Max].m_value.m_flValue, m_vecFields[CFMOut_Max].m_value.m_flValue );
+			m_vecFields[CFMIn_Max].m_value.m_flValue, m_vecFields[CFMOut_Max].m_value.m_flValue,
+			m_vecFields[FlowLimitLow].m_value.m_flValue, m_vecFields[FlowLimitHigh].m_value.m_flValue );
 	}
 }
 

@@ -52,6 +52,11 @@ switch:
 
 sensor:
   - platform: broan
+    # Highest flows reachable, measured by auto balancing (diagnostic)
+    max_supply_fan_cfm:
+      name: "Max Reachable Supply Flow"
+    max_exhaust_fan_cfm:
+      name: "Max Reachable Exhaust Flow"
     power:
       name: Power Draw
     temperature:

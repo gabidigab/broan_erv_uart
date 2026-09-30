@@ -252,13 +252,21 @@ void BroanComponent::setFlowSetpoint( uint8_t nSpeed, uint8_t nSide, float flCFM
 	if( !pszProblem && ( rgflSide[BroanFanSpeed::Minimum] > rgflSide[BroanFanSpeed::Medium] || rgflSide[BroanFanSpeed::Medium] > rgflSide[BroanFanSpeed::High] ) )
 		pszProblem = "it must keep minimum <= medium <= high";
 
+	// Limits reported by the ERV, like the wall controller. Until read, the entity range applies.
+	float flLimitLow = m_vecFields[FlowLimitLow].m_value.m_flValue;
+	float flLimitHigh = m_vecFields[FlowLimitHigh].m_value.m_flValue;
+	if( !pszProblem && flLimitLow != 0.f && flCFM < flLimitLow )
+		pszProblem = "below the ERV's lowest setpoint (0C:50)";
+	if( !pszProblem && flLimitHigh != 0.f && flCFM > flLimitHigh )
+		pszProblem = "above the ERV's highest setpoint (11:50)";
+
 	if( pszProblem )
 	{
-		ESP_LOGW("broan","Flow setpoint %s %s = %.0f CFM not set: %s (minimum %.0f, medium %.0f, high %.0f)",
+		ESP_LOGW("broan","Flow setpoint %s %s = %.0f CFM not set: %s (minimum %.0f, medium %.0f, high %.0f, limits %.2f to %.2f)",
 			g_rgFanSpeedNames[nSpeed], nSide == BroanFlowSide::Supply ? "supply" : "exhaust", flCFM, pszProblem,
 			m_vecFields[g_rgFlowFields[BroanFanSpeed::Minimum][nSide]].m_value.m_flValue,
 			m_vecFields[g_rgFlowFields[BroanFanSpeed::Medium][nSide]].m_value.m_flValue,
-			m_vecFields[g_rgFlowFields[BroanFanSpeed::High][nSide]].m_value.m_flValue );
+			m_vecFields[g_rgFlowFields[BroanFanSpeed::High][nSide]].m_value.m_flValue, flLimitLow, flLimitHigh );
 #ifdef USE_NUMBER
 		// Put Home Assistant back on the ERV's value
 		if( m_rgFlowNumbers[nSpeed][nSide] && flCurrent != 0.f )
