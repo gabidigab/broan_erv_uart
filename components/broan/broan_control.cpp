@@ -23,7 +23,7 @@ std::vector<BroanField_t> BroanComponent::fanModeFields( const std::string &mode
 	else if( mode == FAN_MODE_INTERMITTENT )
 	{
 		vecFields.push_back( m_vecFields[IntRecirculate].copyForUpdate( (uint8_t)0x00 ) );
-		vecFields.push_back( m_vecFields[IntSpeed].copyForUpdate( (uint8_t)0x00 ) );
+		vecFields.push_back( m_vecFields[IntSpeed].copyForUpdate( g_rgIntSpeeds[nSpeed] ) );
 		value = BroanFanMode::Intermittent;
 	}
 	else if( mode == FAN_MODE_TURBO )
@@ -89,7 +89,7 @@ void BroanComponent::setFanSpeed( const std::string &speed )
 		pushFanMode( vecFields, g_rgRecirculateModes[nSpeed] );
 	else if( nMode >= BroanFanMode::Min && nMode <= BroanFanMode::Manual )
 		pushFanMode( vecFields, g_rgAirExchangeModes[nSpeed] );
-	else if( nMode == BroanFanMode::Intermittent && m_vecFields[IntRecirculate].m_value.m_chValue == 0x01 )
+	else if( nMode == BroanFanMode::Intermittent && (uint8_t)m_vecFields[IntRecirculate].m_value.m_chValue <= 0x01 )
 		vecFields.push_back( m_vecFields[IntSpeed].copyForUpdate( g_rgIntSpeeds[nSpeed] ) );
 
 	if( vecFields.empty() )
@@ -140,18 +140,15 @@ void BroanComponent::publishFanState()
 			uint8_t nIntSpeed = m_vecFields[IntSpeed].m_value.m_chValue;
 
 			if( nRecirculate == 0x00 )
-			{
 				pszMode = FAN_MODE_INTERMITTENT;
-				break;
-			}
-
-			if( nRecirculate != 0x01 )
+			else if( nRecirculate == 0x01 )
+				pszMode = FAN_MODE_INTERMITTENT_RECIRCULATE;
+			else
 			{
 				ESP_LOGW("broan","Unknown intermittent recirculation value %02X", nRecirculate);
 				break;
 			}
 
-			pszMode = FAN_MODE_INTERMITTENT_RECIRCULATE;
 			for( int i=0; i<BroanFanSpeed::MAX_FAN_SPEEDS; i++ )
 			{
 				if( g_rgIntSpeeds[i] == nIntSpeed )

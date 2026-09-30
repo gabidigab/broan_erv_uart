@@ -128,6 +128,13 @@ void BroanComponent::writeRegisters( const std::vector<BroanField_t> &values )
 	}
 
 	queueMessage( message );
+
+#ifndef LISTEN_ONLY
+	// Show the new values right away instead of waiting for the read back, otherwise
+	// Home Assistant briefly falls back to the previous state. A write has the same
+	// layout as a read response; the read back that follows corrects any refusal.
+	parseBroanFields( message );
+#endif
 }
 
 bool BroanComponent::readMessage()
