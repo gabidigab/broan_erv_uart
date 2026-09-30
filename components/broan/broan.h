@@ -65,7 +65,9 @@ enum BroanFanMode
 	Off = 0x01,
 	Ovr = 0x02,
 	Intermittent = 0x08,
-	Recirculate = 0x06,
+	RecirculateMin = 0x05,
+	Recirculate = 0x06, // Recirculation at max speed
+	RecirculateMed = 0x07,
 	Min = 0x09,
 	Max = 0x0a,
 	Smart = 0x11,
@@ -361,6 +363,10 @@ private:
 
 	void queueMessage(std::vector<uint8_t>& message);
 	std::string activeModeToString( int code );
+	static bool isRecirculateMode( uint8_t mode ) { return mode >= BroanFanMode::RecirculateMin && mode <= BroanFanMode::RecirculateMed; }
+#ifdef USE_NUMBER
+	void publishFanSpeed();
+#endif
 
 
 protected:

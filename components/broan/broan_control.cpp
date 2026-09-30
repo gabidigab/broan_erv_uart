@@ -19,6 +19,10 @@ void BroanComponent::setFanMode( std::string mode )
 		value = BroanFanMode::Turbo;
 	else if( mode == "humidity" )
 		value = BroanFanMode::Humidity;
+	else if( mode == "recirculate_min" )
+		value = BroanFanMode::RecirculateMin;
+	else if( mode == "recirculate_med" )
+		value = BroanFanMode::RecirculateMed;
 	else if( mode == "recirculate" )
 		value = BroanFanMode::Recirculate;
 	else if( mode == "smart" )
@@ -38,7 +42,26 @@ void BroanComponent::setFanMode( std::string mode )
 
 void BroanComponent::setFanSpeed( float input )
 {
-	//return;
+	// Recirculation has no CFM setpoint: the wall controller picks the speed
+	// through the fan mode itself (0x05 min, 0x07 med, 0x06 max).
+	uint8_t nCurrentMode = m_vecFields[FanMode].m_value.m_chValue;
+	if( isRecirculateMode( nCurrentMode ) )
+	{
+		uint8_t value;
+		if( input <= 33.f )
+			value = BroanFanMode::RecirculateMin;
+		else if( input <= 66.f )
+			value = BroanFanMode::RecirculateMed;
+		else
+			value = BroanFanMode::Recirculate;
+
+		std::vector<BroanField_t> vecFields;
+		vecFields.push_back( m_vecFields[FanMode].copyForUpdate( value ) );
+		m_vecFields[FanMode].markDirty();
+		writeRegisters( vecFields );
+		return;
+	}
+
 	float flMin = m_vecFields[CFMIn_Min].m_value.m_flValue;
 	float flMax = m_vecFields[CFMIn_Max].m_value.m_flValue;
 	if( flMin == 0 || flMax == 0 )

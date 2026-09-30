@@ -405,7 +405,13 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 					continue;
 		}
 
-		
+
+#ifdef USE_NUMBER
+		// The fan speed slider reflects the recirculation level while recirculating.
+		if( unField == BroanField::FanMode )
+			publishFanSpeed();
+#endif
+
 		switch(unField)
 		{
 #ifdef USE_SELECT
@@ -424,6 +430,8 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 					case BroanFanMode::Manual: strMode = "manual"; break;
 					case BroanFanMode::Turbo: strMode = "turbo"; break;
 					case BroanFanMode::Humidity: strMode = "humidity"; break;
+					case BroanFanMode::RecirculateMin: strMode = "recirculate_min"; break;
+					case BroanFanMode::RecirculateMed: strMode = "recirculate_med"; break;
 					case BroanFanMode::Recirculate: strMode = "recirculate"; break;
 					case BroanFanMode::Smart: strMode = "smart"; break;
 
@@ -505,15 +513,7 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 			// @todo: We don't support unbalanced values here currently....
 			case BroanField::CFMIn_Medium:
-			{
-				if( !fan_speed_number_ )
-					continue;
-
-				float flMin = m_vecFields[CFMIn_Min].m_value.m_flValue;
-				float flMax = m_vecFields[CFMIn_Max].m_value.m_flValue;
-				float flAdjusted = remap( pField->m_value.m_flValue, flMin, flMax, 0.f, 100.f );
-				fan_speed_number_->publish_state(flAdjusted);
-			}
+				publishFanSpeed();
 			break;
 
 			case BroanField::IntModeDuration:
@@ -848,6 +848,28 @@ void BroanComponent::runTasks()
 #endif
 }
 
+#ifdef USE_NUMBER
+void BroanComponent::publishFanSpeed()
+{
+	if( !fan_speed_number_ )
+		return;
+
+	switch( m_vecFields[FanMode].m_value.m_chValue )
+	{
+		case BroanFanMode::RecirculateMin: fan_speed_number_->publish_state(0.f); return;
+		case BroanFanMode::RecirculateMed: fan_speed_number_->publish_state(50.f); return;
+		case BroanFanMode::Recirculate: fan_speed_number_->publish_state(100.f); return;
+	}
+
+	float flMin = m_vecFields[CFMIn_Min].m_value.m_flValue;
+	float flMax = m_vecFields[CFMIn_Max].m_value.m_flValue;
+	if( flMax <= flMin )
+		return;
+
+	fan_speed_number_->publish_state( remap( m_vecFields[CFMIn_Medium].m_value.m_flValue, flMin, flMax, 0.f, 100.f ) );
+}
+#endif
+
 std::string BroanComponent::activeModeToString( int code )
 {
 	// @todo: Figure these out
@@ -871,6 +893,10 @@ std::string BroanComponent::activeModeToString( int code )
 		case 2: return "Max";
 		case 3: return "Turbo";
 		case 4: return "Manual";
+		// Observed on a VanEE V180H75RT
+		case 6: return "Recirculate Min";
+		case 7: return "Recirculate Max";
+		case 8: return "Recirculate Med";
 	}
 	
 

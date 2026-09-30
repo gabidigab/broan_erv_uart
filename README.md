@@ -37,6 +37,7 @@ Also be aware some RS485 devices will label their pins A and B instead of D+ and
 ## Supported features
 * Setting fan mode (Standby, Min, Max, Intermittent, Turbo, Override, and Med, which is treated as manual control)
 * Setting fan speed in manual mode
+* Recirculation speed (`recirculate_min`, `recirculate_med`, `recirculate` = max). While recirculating, the fan speed number picks the level: 0-33 min, 34-66 med, 67-100 max
 * Humidity control mode
 * Intake temperature
 * Filter life left
