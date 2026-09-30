@@ -381,7 +381,6 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 	std::string strBuf;
 	bool bFanStateChanged = false;
-	bool bMediumCFMChanged = false;
 	bool bSetpointsChanged = false;
 
     while (i + 3 <= message.size())
@@ -436,10 +435,6 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 			case BroanField::CFMIn_Medium:
 			case BroanField::CFMOut_Medium:
-				bMediumCFMChanged = true;
-				bSetpointsChanged = true;
-			break;
-
 			case BroanField::CFMIn_Min:
 			case BroanField::CFMOut_Min:
 			case BroanField::CFMIn_Max:
@@ -653,9 +648,6 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 			m_vecFields[CFMIn_Medium].m_value.m_flValue, m_vecFields[CFMOut_Medium].m_value.m_flValue,
 			m_vecFields[CFMIn_Max].m_value.m_flValue, m_vecFields[CFMOut_Max].m_value.m_flValue );
 	}
-
-	if( bFanStateChanged || bMediumCFMChanged )
-		enforceAirExchangeMediumCFM();
 }
 
 void BroanComponent::handleUnknownField(uint32_t nOpcodeHigh, uint32_t nOpcodeLow, uint8_t len, uint32_t i, const std::vector<uint8_t>& message )

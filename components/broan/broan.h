@@ -338,7 +338,6 @@ public:
 public:
 	// Setup
 	void set_flow_control_pin(GPIOPin *flow_control_pin) { this->flow_control_pin_ = flow_control_pin; }
-	void set_air_exchange_medium_cfm(float flCFM) { m_flAirExchangeMediumCFM = flCFM; }
 
 	// Control API
 	void setFanMode( const std::string &mode );
@@ -407,10 +406,6 @@ private:
 	void storeFanSpeed( uint8_t nSpeed );
 	std::vector<BroanField_t> fanModeFields( const std::string &mode, uint8_t nSpeed );
 	void pushFanMode( std::vector<BroanField_t> &vecFields, uint8_t nMode );
-	void enforceAirExchangeMediumCFM();
-
-	float m_flAirExchangeMediumCFM = NAN; // Optional, see air_exchange_medium_cfm
-	uint32_t m_unLastMediumCFMFix = 0;
 
 	uint8_t m_nFanSpeed = BroanFanSpeed::Medium; // Last speed chosen or reported by the ERV
 	ESPPreferenceObject m_prefFanSpeed;
