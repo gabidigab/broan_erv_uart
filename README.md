@@ -1,10 +1,13 @@
 # Broan ERV serial component
 
-An ESP32 component to communicate with Broan, Nutone, Venmar, and VanEE ERVs via their rs485 interface.
+An ESPHome component to control Broan, Nutone, Venmar and VanEE ERVs / HRVs through their RS-485 wall controller bus, from Home Assistant.
 
-The protocol is documented [here](https://spitko.net/2025/08/08/Reverse-Engineering-an-ERV/)
+This is a fork of [nspitko/broan_erv_uart](https://github.com/nspitko/broan_erv_uart). The original protocol work is documented [here](https://spitko.net/2025/08/08/Reverse-Engineering-an-ERV/). This fork adds everything the original wall controller can do from its user and installer menus, reverse engineered by sniffing a **VanEE V180H75RT** (HRV with recirculation) and its wall controller:
 
-Currently this project is stable, but may be missing some advanced features from certain models. If there is a feature you'd like added, please open an issue. We may need packet capture from a unit with this functionality.
+* fan mode and fan speed as two separate controls, including **recirculation** and **intermittent** speeds
+* installer menu: **flow setpoints** (minimum / medium / high, supply / exhaust) bounded by the ERV's own limits, and **defrost mode**
+* a **listen only** mode to capture what the wall controller reads and writes, and map new registers
+* an energy sensor example for the Home Assistant Energy dashboard
 
 <table>
   <tr>
@@ -18,116 +21,149 @@ Currently this project is stable, but may be missing some advanced features from
 </table>
 
 ## Supported models
-We currently don't have a good range of what does and don't work, but it's currently believed that all Broan, Nutone, and VanEE ERVs that have rs485 inputs probably work. The easiest way to check is to see if your unit supports the VTTOUCHW (All three brands have a version of this interface, they are all presumed to be the same)
+All Broan, Nutone, Venmar and VanEE ERVs / HRVs with an RS-485 wall controller bus probably work. The easiest check is whether your unit supports the VTTOUCHW (all brands have a version of this interface).
 
-HRVs have been reported to work as well, but tend to support fewer features. You can safely remove sensors from the yaml that your device does not support.
+Tested in this fork: **VanEE V180H75RT** (HRV, recirculation). HRVs tend to support fewer features than ERVs: remove from your YAML the sensors your unit never fills (eg `temperature_out` on the V180H75RT).
+
+## Features
+
+### Fan mode and speed
+Two selects, like the wall controller:
+
+| Fan mode | Uses the fan speed | Registers written |
+|---|---|---|
+| Off | – | `00:20 = 0x01` |
+| Air Exchange | yes | `00:20` = `0x09` Minimum, `0x0B` Medium, `0x0A` High |
+| Recirculate | yes | `00:20` = `0x05` Minimum, `0x07` Medium, `0x06` High |
+| Intermittent | yes | `03:22 = 0x00`, `0E:22` = speed, `00:20 = 0x08` |
+| Intermittent + Recirculate | yes | `03:22 = 0x01`, `0E:22` = speed, `00:20 = 0x08` |
+| Turbo / Humidity / Smart | – | `00:20` = `0x0C` / `0x0D` / `0x11` |
+| Override | – | read only: shown when an auxiliary (dry contact) remote forces the ERV |
+
+* Intermittent speed `0E:22`: `0x00` Minimum, `0x02` Medium, `0x01` High, applied to both the exchange and the recirculation phases.
+* Like the wall controller, every `00:20` write is followed by `08:20 = 0x00` in the same frame. Without it, Air Exchange Medium runs slower than Minimum.
+* Changing the speed only rewrites what is needed: `00:20` for Air Exchange and Recirculate, `0E:22` alone for both intermittent modes. In other modes the speed is remembered and applied when switching back. The last speed survives reboots.
+* Mode and speed are rebuilt from the ERV (`00:20`, `03:22`, `0E:22`), so changes made elsewhere show up in Home Assistant. New values are shown as soon as they are sent; the read back corrects them if the ERV refuses.
+
+### Intermittent period
+Minutes ON per hour, 10 to 55 in steps of 5. Stored by the ERV in seconds (`02:22`, eg 600 = 10 min).
+
+### Installer menu
+All in the Configuration section of the device in Home Assistant. Nothing here is ever written automatically, only when changed from Home Assistant.
+
+* **Flow setpoints** (CFM) for Minimum (`0A:50` / `0B:50`), Medium (`06:22` / `08:22`) and High (`0E:50` / `0F:50`), supply / exhaust. Like the wall controller:
+  * both sides of a speed are written together, supply first;
+  * minimum ≤ medium ≤ high is enforced on each side;
+  * values outside the ERV's limits are refused: lowest `0C:50` (65 CFM on the V180H75RT), highest `11:50` (152.52 CFM, measured by auto balancing). Until those are read, the entity range applies (default 65 to 193).
+* **Defrost mode** (`12:50`): Discretion (`0x02`, factory setting, defrost without fan speed change) or Plus (`0x01`, extended defrost for colder regions).
+* **Highest reachable flows** (`16:10` supply, `17:10` exhaust), measured by auto balancing, as diagnostic sensors.
+
+### Other
+* Humidity control mode (see below)
+* Intake temperature, fan CFM and RPM, power draw
+* Filter life left and filter reset
+* Fault and warning codes, active mode
 
 ## Requirements
-1) You will need an esphome device that can communicate over rs485. Some devices come with this out of the box (waveshare esp32-s3-relay-6ch), or you can just buy an external tranceiver and wire it to the uart of your choice. Note that the waveshare device listed earlier is much easier to use than most, as it has automatic flow control and can be powered directly from the 12v output on your ERV. If you use a different device and make a working, stable configuration, please open an issue so we can start building a list with configuration files.
-2) This library does not coexist with other serial wall remotes. This is a software limitation on the ERV itself, it will only ever respond to one device on the bus. It's theoretically possible to MITM a remote but that's outside the scope of this component.
-3) You will ideally want to power this directly from the 12v output on the erv itself. this isn't a hard requirement, but it simplifies things a lot. If the ERV completes the handshake with the esp32 and it later goes away, the ERV will eventually drop into an error state and shut down, so it's just one less point of failure.
+1. An ESPHome device that talks RS-485: either a board with a built-in transceiver (eg Waveshare ESP32-S3-RS485-CAN, Waveshare ESP32-S3-Relay-6CH) or an external transceiver on a UART.
+2. **Only one controller on the bus.** The ERV answers a single main controller, so the original wall controller must be disconnected (at least D+ and D-) while the ESP is in control. The only exception is `listen_only` (see below). Auxiliary dry contact remotes keep working (mode shows Override).
+3. Ideally power the ESP from the ERV's 12V output. If the ERV completes the handshake with the ESP and the ESP later goes away, the ERV eventually goes into an error state.
 
 ## Installation
-Near the control interface on the ERV, look for a green terminal block that has D+, D-, and GND on it (typically a 6 terminal block that includes 12V, LED, and OVR). Connect the D+, D-, and GND connectors to your RS485 tranceiver. Ideally you can also use the +12v but very few ESP32s are set up to handle input voltages above 5V to check with your spec sheet first. If not, just use a USB cable and wall charger. If you go this route, you may need to additionally run a wire from the GND terminal on the ERV to the GND pin on the esp32, but this will depend on how your rs485 tranceiver is set up. Only do this if you're getting unexplained communication errors or crashes.
+Near the control interface on the ERV, look for the green terminal block with D+, D-, GND and 12V (typically 6 terminals with LED and OVR). Connect D+, D- and GND to your transceiver, and 12V if your board accepts it (check its datasheet, many ESP32 boards don't). Never power the board from 12V and USB at the same time unless its datasheet says it's safe.
 
-Some rs485 trancevers have a jumper for the terminating resistor, some do not. In my case I found I did not need a termination resister, but you may need one. Try enabling this, or adding a resistor manually across the terminals on the ESP32 side, if you have communication issues. You'll know if you flip these because you'll see a bunch of spew about alignment errors and unknown commands.
-
-Also be aware some RS485 devices will label their pins A and B instead of D+ and D-. Somewhat confusingly, A is D- and B is D+
-
-## Supported features
-* Setting fan mode: Off, Air Exchange, Intermittent, Intermittent + Recirculate, Turbo, Humidity, Recirculate, Smart. Override is shown when an auxiliary remote forces the ERV, it can't be selected. Like the wall controller, every fan mode write (00:20) is followed by 08:20 = 0x00; without it, Air Exchange Medium runs slower than Minimum on some units.
-* Setting fan speed (Minimum, Medium, High) for Air Exchange, Recirculate, Intermittent + Recirculate and Intermittent. In both intermittent modes the speed is 0E:22, as captured from the wall controller for the three speeds. In other modes the choice is kept and applied when switching to one of these modes. The last choice survives reboots.
-* Intermittent period, in minutes ON per hour (10 to 55, steps of 5)
-* Installer defrost mode: Discretion (factory setting, defrost without fan speed change) or Plus (extended defrost for colder regions). Register 12:50, written alone like the wall controller, never automatically.
-* Installer flow setpoints (CFM) for Minimum, Medium and High, supply and exhaust. Like the wall controller, both sides of a speed are written together (supply first), and minimum <= medium <= high is enforced on each side. Values are only written when changed from Home Assistant, never automatically. Like the wall controller, values outside the ERV's own limits (lowest 0C:50, highest 11:50, eg 65 to 152.52 CFM) are refused; until those are read, the entity range applies.
-* Highest flows reachable, measured by auto balancing (16:10 supply, 17:10 exhaust), as diagnostic sensors
-* Humidity control mode
-* Intake temperature
-* Filter life left
-* Fan CFM 
-
-More features will be added as time allows. I've documented many fields that aren't supported yet. If there's a specific feature you want prioritized, open an issue. This project is at a point where it "works for me" so I don't have a lot of guiding light on what else should be added without external input.
-
-## Humidity Control Mode
-In Humidity Control Mode, the controller sets a target humidity level and the ERV automatically runs if the humidity is above this level. The ERV does not have a humidity sensor - the current humidity reading is sent periodically from the controller.  Since we are replacing the original controller, we need to send current humidity readings from the ESP device. This can be done from a lambda in your ESPHome config calling the setCurrentHumidity() function.  For an example configuration, see the [humidity_control_sample.yaml](./examples/humidity_control_example.yaml) configuration in the [examples](./examples/) directory.
-
-To use humidity control mode once it is enabled, set the desired humidity with "Humidity Setpoint", and then turn on the Humidity Control switch.
+* **Wire labels.** Many transceivers label the lines A and B, and conventions differ: often A = D- and B = D+, but the Waveshare ESP32-S3-RS485-CAN labels them A+ / B- and works with D+ → A+, D- → B-. If you see alignment or checksum errors, swap the two data wires (it doesn't damage anything).
+* **Termination.** Leave the 120 Ω terminator off first; enable it only if you get communication errors.
+* **Direction pin.** Transceivers without automatic direction control (eg SP3485 on the Waveshare ESP32-S3-RS485-CAN, EN = GPIO21) need a direction pin. Declare it **in the `broan:` block** (`flow_control_pin`), not under `uart:`: the component raises it only while sending each frame. Reading works without it, which makes a missing or misplaced pin look like "reads work, writes don't".
 
 ## Capturing registers from a wall controller (listen only)
-To map a feature this component doesn't support yet, you can wire the ESP in parallel with the original wall controller (same D+, D- and GND terminals, termination off) and set:
-```
+To map a feature this component doesn't support yet, wire the ESP in parallel with the original wall controller (same D+, D- and GND terminals, termination off) and set:
+```yaml
 broan:
   uart_id: rs485
+  flow_control_pin: GPIO21
   listen_only: true
 ```
-In this mode the ESP never transmits. Every register the wall controller writes is logged as `Sniffed write XXYY (known|UNKNOWN): ...`. The ERV's answers to the wall controller's reads are logged as `Sniffed read XXYY (known|UNKNOWN): ...`, the first time a register is seen and whenever its value changes (the wall controller polls in a loop). Change the setting on the wall controller and look for the matching line. Remove `listen_only` (and disconnect the wall controller) to use the ESP as the controller again.
+In this mode the ESP never transmits:
+* every register the wall controller writes is logged as `Sniffed write XXYY (known|UNKNOWN): ...`;
+* the ERV's answers to the wall controller's reads are logged as `Sniffed read XXYY (known|UNKNOWN): ...`, the first time a register is seen and whenever its value changes (the wall controller polls in a loop);
+* the Home Assistant entities follow what the wall controller sets, but changing them sends nothing (a warning is logged).
 
-## FAQ
-Q: I see errors about failed communication
+Change a setting on the wall controller and look for the matching lines. Power cycling the ERV while listening shows what the wall controller reads at start up. Remove `listen_only` (and disconnect the wall controller) to control the ERV from the ESP again.
 
-A: This could be a lot of things.
-- If you're getting timeouts, it's probably the yaml being misconfigured. A lot of rs485 devices want a flow control pin, which needs to be specified (check your device's datasheet)
-- If you see it getting data but complaining about alignment and unknown commands, it's likely either you swapped the +/- wires, or the communication is very weak. Double check that you wired up the ground wire correctly, and try adding or removing esp side termination.
+## Register notes (VanEE V180H75RT)
+Found with `listen_only`. Registers are written `group:field` like the logs (`XXYY` = field `XX`, group `YY`).
 
-Q: Why doesn't it support X?
+| Register | Type | Meaning |
+|---|---|---|
+| `00:20` | byte | Fan mode (see table above) |
+| `01:20` | byte | Read back as `0x08` right after `00:20 = 0x08`: probably the mode actually applied. Not used |
+| `07:20` | int | Active mode: 1 Running, 2 Max, 4 Manual, 6 / 7 / 8 Recirculate Minimum / High / Medium |
+| `08:20` | byte | Written `0x00` by the wall controller after every `00:20` write |
+| `02:22` | int | Intermittent ON time, seconds per hour |
+| `03:22` | byte | Intermittent: recirculate during the OFF period (`0x00` / `0x01`) |
+| `0E:22` | byte | Intermittent speed: `0x00` min, `0x02` med, `0x01` max |
+| `06:22` / `08:22` | float | Medium flow setpoint, supply / exhaust |
+| `0A:50` / `0B:50` | float | Minimum flow setpoint, supply / exhaust |
+| `0E:50` / `0F:50` | float | High flow setpoint, supply / exhaust |
+| `0C:50` | float | Lowest flow setpoint allowed (65) |
+| `11:50` | float | Highest flow setpoint allowed (152.52) |
+| `16:10` / `17:10` | float | Highest reachable flow, supply / exhaust (auto balancing) |
+| `12:50` | byte | Defrost mode: `0x01` Plus, `0x02` Discretion |
+| `0D:50`, `10:50`, `17:50`, `18:50`, `04:22`, `16:50` | | Read by the wall controller in the installer menu, role unknown (values in `broan.h`) |
 
-A: Not everything is actually exposed via the rs485 interface. I may need dumps from a unit with the feature you're requesting, or it might already be mapped and just needs to be plumbed though to Home Assistant. Feel free to open an issue or PR
+## Humidity Control Mode
+In Humidity Control Mode the ERV runs when the humidity is above the target. The ERV has no humidity sensor: the controller sends the current humidity periodically. Since the ESP replaces the controller, send it from ESPHome with `setCurrentHumidity()`, eg from a Home Assistant sensor. See [humidity_control_example.yaml](./examples/humidity_control_example.yaml).
 
-Q: What if I still want wall controls?
+To use it, set the target with "Humidity Setpoint", then turn on the "Humidity Control" switch.
 
-A: You can use the aux remotes, those use the dry contact interface which is a hard override. The fan mode will indicate "ovr" (override) when these controls are used. This is how Broan bypasses the protocol limitation. Alternatively, look at something like the Sonoff NSPanel and control the device via Home Assistant instead.
-
-### ESPhome yaml
-Add this to an existing config.
-```
+## ESPHome YAML
+```yaml
 external_components:
   - source:
       type: git
-      url: https://github.com/nspitko/broan_erv_uart
+      url: https://github.com/gabidigab/broan_erv_uart
       ref: main
     components: [ broan ]
 
 uart:
   id: rs485
-  tx_pin: GPIO17 # Change these to match your rs485 tranceiver. 17/18 is txd1/rxd1
+  tx_pin: GPIO17 # Change these to match your RS-485 transceiver
   rx_pin: GPIO18
   baud_rate: 38400
   rx_buffer_size: 2048
-  #debug:
-   # direction: BOTH
-   # dummy_receiver: false
-   # sequence:
-   #   - lambda: UARTDebug::log_hex(direction, bytes, ' ');
 
 broan:
+  id: erv
   uart_id: rs485
+  # Direction pin of transceivers without automatic direction control
+  # (eg GPIO21 on the Waveshare ESP32-S3-RS485-CAN). Here, not under uart:.
+  flow_control_pin: GPIO21
+  # listen_only: true   # Capture mode, wall controller connected in parallel
 
 select:
   - platform: broan
     # Off, Air Exchange, Intermittent, Intermittent + Recirculate, Turbo, Humidity,
     # Recirculate, Smart, Override (read only)
     fan_mode:
-      name: "fan mode"
+      name: "Fan mode"
     # Minimum, Medium, High. Used by Air Exchange, Recirculate,
     # Intermittent + Recirculate and Intermittent
     fan_speed:
-      name: "fan speed"
+      name: "Fan speed"
     # Installer menu: Discretion (factory setting) or Plus (colder regions)
     defrost_mode:
       name: "Defrost mode"
 
 number:
   - platform: broan
-
-    # Minutes ON per hour in intermittent mode, 10 to 55 in steps of 5 (eg, 20 means
-    # the ERV runs 20 minutes and is off 40 minutes every hour)
+    # Minutes ON per hour in intermittent mode, 10 to 55 in steps of 5
     intermittent_period:
-      name: "Intermittent Period"
+      name: "Intermittent period"
 
     # Installer flow setpoints, in CFM (entry box, step 1). Values outside the ERV's
     # limits (0C:50 / 11:50) are refused, like the wall controller. Default range 65 to 193
     # (VanEE V180H75RT datasheet), change it with min_value / max_value.
-    # Registers: minimum 0A:50 / 0B:50, medium 06:22 / 08:22, high 0E:50 / 0F:50.
     minimum_supply_flow:
       name: "Minimum supply flow"
     minimum_exhaust_flow:
@@ -138,76 +174,99 @@ number:
       name: "Medium exhaust flow"
     high_supply_flow:
       name: "High supply flow"
-      # max_value: 193
     high_exhaust_flow:
       name: "High exhaust flow"
 
 sensor:
   - platform: broan
+    # As reported by the ERV, in watts
+    power:
+      name: "Power draw"
+      id: erv_power
+      state_class: measurement
+    # Intake air temperature. This will generally read high
+    temperature:
+      name: "Temperature"
+    # In days
+    filter_life:
+      name: "Remaining filter life"
+    # Flows and fan speeds as reported by the ERV
+    supply_fan_cfm:
+      name: "Supply fan CFM"
+    exhaust_fan_cfm:
+      name: "Exhaust fan CFM"
+    supply_fan_rpm:
+      name: "Supply fan RPM"
+    exhaust_fan_rpm:
+      name: "Exhaust fan RPM"
     # Highest flows reachable, measured by auto balancing (diagnostic)
     max_supply_fan_cfm:
       name: "Max reachable supply flow"
     max_exhaust_fan_cfm:
       name: "Max reachable exhaust flow"
-    # As reported by the ERV, in watts
-    power:
-      name: Power draw
+    # Exhaust air temperature. Not available on all units (not on the V180H75RT)
+    # temperature_out:
+    #   name: "Temperature out"
 
-    # Intake air temperature. This will generally read high
-    temperature:
-      name: Temperature
-
-    # In Days
-    filter_life:
-      name: Remaining Filter life
-
-    # CFM values as reported by the ERV
-    supply_fan_cfm:
-      name: "Supply fan CFM"
-    exhaust_fan_cfm:
-      name: "Exhaust fan CFM"
-
-    # Fan motor RPM values
-    supply_fan_rpm:
-      name: "Supply fan RPM"
-    exhaust_fan_rpm:
-      name: "Exhaust fan RPM"
-
-    # Not all ERVs have these sensor, remove if you don't get readings from it.
-
-    # Exhaust air temperature.
-    temperature_out:
-      name: Temperature Out
-
+  # Energy (kWh) for the Home Assistant Energy dashboard
+  - platform: integration
+    name: "ERV energy"
+    sensor: erv_power
+    time_unit: h
+    integration_method: left
+    restore: true
+    unit_of_measurement: kWh
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
 
 text_sensor:
   - platform: broan
-    
     # If there is a major fault, it will be indicated here. Else "OK"
     fault_code:
       name: "Fault code"
-    
-    # Same as above, but for warnings.
+    # Same as above, but for warnings
     warning_code:
       name: "Warning code"
-
-    # Active mode. Indicates what the fans are currently doing
+    # What the fans are currently doing
     active_mode:
-      name: "Active Mode"
-
+      name: "Active mode"
     # Potentially useful for development
-    #model: { name: "Model" }
-    #firmware: { name: "Firmware" }
-    #firmware_version: { name: "Firmware Version" }
-    #hardware_revision: { name: "Hardware Rev" }
-
-
+    # model: { name: "Model" }
+    # firmware: { name: "Firmware" }
+    # firmware_version: { name: "Firmware version" }
+    # hardware_revision: { name: "Hardware rev" }
 
 button:
   - platform: broan
-
-    # Resets filter life to 7884000 seconds / 3 months (Default behavior)
+    # Resets filter life to 7884000 seconds / 3 months
     filter_reset:
-      name: Filter reset
-
+      name: "Filter reset"
 ```
+
+## Changes from the original component
+If you come from nspitko/broan_erv_uart, update your Home Assistant automations:
+* **Fan mode options** are now `Off`, `Air Exchange`, `Intermittent`, `Intermittent + Recirculate`, `Turbo`, `Humidity`, `Recirculate`, `Smart`, `Override`. The speed moved to the new `fan_speed` select: `min` / `manual` / `max` become `Air Exchange` + `Minimum` / `Medium` / `High`, `int` becomes `Intermittent`, `ovr` becomes `Override`.
+* The **`fan_speed` number** (percentage between min and max CFM) is replaced by the **`fan_speed` select**. Flow setpoints are now set directly, in CFM, with the installer flow numbers.
+* **`intermittent_period`** is now in minutes per hour (was seconds).
+
+## FAQ
+**Q: I see errors about failed communication**
+
+* Timeouts, or reads work but writes don't: usually the direction pin. Declare `flow_control_pin` in the `broan:` block (see Installation).
+* Data arrives but with alignment or checksum errors: swap D+ / D-, check the ground wire, try toggling the termination.
+
+**Q: A setting changed in Home Assistant snaps back**
+
+* In `listen_only` the ESP never sends anything, so entities only display what the wall controller sets.
+* Flow setpoints outside the ERV's limits, or breaking minimum ≤ medium ≤ high, are refused. The log says why.
+
+**Q: Why doesn't it support X?**
+
+Not everything is exposed over RS-485, and some features differ between models. Capture it with `listen_only` and open an issue or PR with the `Sniffed write` / `Sniffed read` lines.
+
+**Q: What if I still want wall controls?**
+
+Use the auxiliary remotes: they use the dry contact interface, a hard override (fan mode shows `Override`). Or control the ERV from Home Assistant, eg with a wall tablet or a Sonoff NSPanel.
