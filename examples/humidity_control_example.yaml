@@ -27,9 +27,17 @@ select:
       name: "Fan Mode"
     fan_speed:
       name: "Fan Speed"
+    # Installer menu, shown with the flow setpoints in the Configuration section
+    defrost_mode:
+      name: "Defrost Mode"
 
 number:
   - platform: broan
+    # Installer flow setpoints (CFM), optional
+    medium_supply_flow:
+      name: "Medium Supply Flow"
+    medium_exhaust_flow:
+      name: "Medium Exhaust Flow"
     humidity_setpoint:          # set the desired humidity level
       name: "Humidity Setpoint"
 

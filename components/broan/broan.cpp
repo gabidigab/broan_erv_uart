@@ -433,6 +433,23 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 				bFanStateChanged = true;
 			break;
 
+#ifdef USE_SELECT
+			case BroanField::DefrostMode:
+			{
+				if( !defrost_mode_select_ )
+					continue;
+
+				uint8_t nDefrost = pField->m_value.m_chValue;
+				if( nDefrost == BroanDefrostMode::DefrostDiscretion )
+					defrost_mode_select_->publish_state( DEFROST_MODE_DISCRETION );
+				else if( nDefrost == BroanDefrostMode::DefrostPlus )
+					defrost_mode_select_->publish_state( DEFROST_MODE_PLUS );
+				else
+					ESP_LOGW("broan","Unknown defrost mode %02X", nDefrost);
+			}
+			break;
+#endif
+
 			case BroanField::CFMIn_Medium:
 			case BroanField::CFMOut_Medium:
 			case BroanField::CFMIn_Min:
@@ -643,6 +660,19 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 	if( bSetpointsChanged )
 	{
+#ifdef USE_NUMBER
+		for( int nSpeed=0; nSpeed<BroanFanSpeed::MAX_FAN_SPEEDS; nSpeed++ )
+		{
+			for( int nSide=0; nSide<BroanFlowSide::MAX_FLOW_SIDES; nSide++ )
+			{
+				float flValue = m_vecFields[g_rgFlowFields[nSpeed][nSide]].m_value.m_flValue;
+				number::Number *pNumber = m_rgFlowNumbers[nSpeed][nSide];
+				if( pNumber && flValue != 0.f && ( !pNumber->has_state() || pNumber->state != flValue ) )
+					pNumber->publish_state( flValue );
+			}
+		}
+#endif
+
 		ESP_LOGI("broan","Flow setpoints (supply / exhaust CFM): min %.0f / %.0f, med %.0f / %.0f, max %.0f / %.0f",
 			m_vecFields[CFMIn_Min].m_value.m_flValue, m_vecFields[CFMOut_Min].m_value.m_flValue,
 			m_vecFields[CFMIn_Medium].m_value.m_flValue, m_vecFields[CFMOut_Medium].m_value.m_flValue,
