@@ -274,6 +274,8 @@ void BroanComponent::handleMessage(uint8_t sender, uint8_t target, const std::ve
 			break;
 		case 0x40:
 			logRegisterWrites(message);
+			// Same layout as a read response: reflect what the wall controller sets.
+			parseBroanFields(message);
 			break;
 #endif
 		default:
