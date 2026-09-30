@@ -35,7 +35,7 @@ Some rs485 trancevers have a jumper for the terminating resistor, some do not. I
 Also be aware some RS485 devices will label their pins A and B instead of D+ and D-. Somewhat confusingly, A is D- and B is D+
 
 ## Supported features
-* Setting fan mode: Off, Air Exchange, Intermittent, Intermittent + Recirculate, Turbo, Humidity, Recirculate, Smart. Override is shown when an auxiliary remote forces the ERV, it can't be selected.
+* Setting fan mode: Off, Air Exchange, Intermittent, Intermittent + Recirculate, Turbo, Humidity, Recirculate, Smart. Override is shown when an auxiliary remote forces the ERV, it can't be selected. Like the wall controller, every fan mode write (00:20) is followed by 08:20 = 0x00; without it, Air Exchange Medium runs slower than Minimum on some units.
 * Setting fan speed (Minimum, Medium, High) for Air Exchange, Recirculate and Intermittent + Recirculate. In other modes the choice is kept and applied when switching to one of these modes. The last choice survives reboots.
 * Intermittent period, in minutes ON per hour (10 to 55, steps of 5)
 * Humidity control mode

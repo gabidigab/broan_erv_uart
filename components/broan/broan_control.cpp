@@ -37,8 +37,15 @@ std::vector<BroanField_t> BroanComponent::fanModeFields( const std::string &mode
 	else
 		return vecFields;
 
-	vecFields.push_back( m_vecFields[FanMode].copyForUpdate( value ) );
+	pushFanMode( vecFields, value );
 	return vecFields;
+}
+
+// Like the wall controller: every FanMode write is followed by 08:20 = 0x00.
+void BroanComponent::pushFanMode( std::vector<BroanField_t> &vecFields, uint8_t nMode )
+{
+	vecFields.push_back( m_vecFields[FanMode].copyForUpdate( nMode ) );
+	vecFields.push_back( m_vecFields[FanModeCommit].copyForUpdate( (uint8_t)0x00 ) );
 }
 
 void BroanComponent::setFanMode( const std::string &mode )
@@ -79,9 +86,9 @@ void BroanComponent::setFanSpeed( const std::string &speed )
 	std::vector<BroanField_t> vecFields;
 	uint8_t nMode = m_vecFields[FanMode].m_value.m_chValue;
 	if( nMode >= BroanFanMode::RecirculateMin && nMode <= BroanFanMode::RecirculateMed )
-		vecFields.push_back( m_vecFields[FanMode].copyForUpdate( g_rgRecirculateModes[nSpeed] ) );
+		pushFanMode( vecFields, g_rgRecirculateModes[nSpeed] );
 	else if( nMode >= BroanFanMode::Min && nMode <= BroanFanMode::Manual )
-		vecFields.push_back( m_vecFields[FanMode].copyForUpdate( g_rgAirExchangeModes[nSpeed] ) );
+		pushFanMode( vecFields, g_rgAirExchangeModes[nSpeed] );
 	else if( nMode == BroanFanMode::Intermittent && m_vecFields[IntRecirculate].m_value.m_chValue == 0x01 )
 		vecFields.push_back( m_vecFields[IntSpeed].copyForUpdate( g_rgIntSpeeds[nSpeed] ) );
 
