@@ -115,6 +115,7 @@ enum BroanField
 	FanMode = 0,
 	IntRecirculate, // Keep right after FanMode so they are polled together
 	IntSpeed,
+	FanModeCommit, // Written right after FanMode, never polled
 	HumidityControl,
 	IntModeDuration,
 	TargetHumidityA, // Set both to same value per VTSPEEDW
@@ -255,6 +256,7 @@ public:
 		{ 0x00, 0x20, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // FanMode
 		{ 0x03, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode: recirculate during the off period. 0x00 = off, 0x01 = on
 		{ 0x0E, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode + recirculation speed, for both the exchange and recirculation phases. 0x00 = min, 0x01 = max, 0x02 = med. Wall controller writes 0x00 without recirculation.
+		{ 0x08, 0x20, BroanFieldType::Byte, {0}, UPDATE_RATE_NEVER }, // Meaning unknown. A VanEE V180H75RT wall controller writes 0x00 right after 00:20 on every mode change (air exchange, recirculation, intermittent). Without it, air exchange medium (0x0B) runs slower than minimum, so we mimic it.
 		{ 0x0F, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_SLOW }, // Humidity control on/off
 		{ 0x02, 0x22, BroanFieldType::Int, {0}, UPDATE_RATE_SLOW }, // INT mode on time (seconds, OFF time will be what remains of an hour)
 		{ 0x0C, 0x22, BroanFieldType::Float, {0}, UPDATE_RATE_SLOW }, // Target humidity?
@@ -318,7 +320,6 @@ public:
 		{ 0x00, 0x22, BroanFieldType::Int, {0} }, // Unknown. 14400 / 40380000
 		{ 0x07, 0x50, BroanFieldType::Int, {0} }, // Unknown. VTSPEEDW often sets this to -1
 		{ 0x03, 0x20, BroanFieldType::Byte, {0} }, // Unknown. Set to 0 when entering INT mode
-		{ 0x08, 0x20, BroanFieldType::Byte, {0} }, // Unknown. Believed to be 0 when entering SMART mode and 1 in continuous modes, but a VanEE V180H75RT wall controller writes 0x00 after 00:20 on every mode change observed, including continuous air exchange, recirculation and intermittent.
 
 		// Airstream humidity? Needs verification. Broan wiring and parts diagrams for b150e75nt do not list humidity sensors, only the single j7a thermistor. 
 		// May be specific to certain models, this model DOES report changing values on these registers, so I'm suspicious.
@@ -404,6 +405,7 @@ private:
 	void publishFanState();
 	void storeFanSpeed( uint8_t nSpeed );
 	std::vector<BroanField_t> fanModeFields( const std::string &mode, uint8_t nSpeed );
+	void pushFanMode( std::vector<BroanField_t> &vecFields, uint8_t nMode );
 
 	uint8_t m_nFanSpeed = BroanFanSpeed::Medium; // Last speed chosen or reported by the ERV
 	ESPPreferenceObject m_prefFanSpeed;
