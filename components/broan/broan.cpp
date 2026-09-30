@@ -110,6 +110,9 @@ bool BroanComponent::readHeader()
 
 void BroanComponent::writeRegisters( const std::vector<BroanField_t> &values )
 {
+#ifdef LISTEN_ONLY
+	ESP_LOGW("broan", "listen_only: change not sent to the ERV. Remove listen_only to control it from here.");
+#endif
 	std::vector<uint8_t> message;
 
 	message.push_back(0x40); // Write
