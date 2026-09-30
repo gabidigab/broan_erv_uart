@@ -214,9 +214,9 @@ void BroanComponent::setFanSpeedCFM( BroanFanMode mode, BroanCFMMode direction, 
 		case BroanFanMode::Min:
 		{
 			if( ( direction & BroanCFMMode::Input ) != 0 )
-				vecFields.push_back( m_vecFields[CFMIn_Max].copyForUpdate( flTargetCFM ) );
+				vecFields.push_back( m_vecFields[CFMIn_Min].copyForUpdate( flTargetCFM ) );
 			if( ( direction & BroanCFMMode::Output ) != 0 )
-				vecFields.push_back( m_vecFields[CFMOut_Max].copyForUpdate( flTargetCFM ) );
+				vecFields.push_back( m_vecFields[CFMOut_Min].copyForUpdate( flTargetCFM ) );
 		}
 		break;
 
@@ -224,6 +224,55 @@ void BroanComponent::setFanSpeedCFM( BroanFanMode mode, BroanCFMMode direction, 
 		default:
 			ESP_LOGW("broan","Unhandled: Setting fan speed limits for  mode %02X", mode );
 
+	}
+
+	writeRegisters( vecFields );
+}
+
+// Installer menu flow setpoint. Like the wall controller, both sides of the speed
+// are written together, supply first. Keeps minimum <= medium <= high on each side.
+void BroanComponent::setFlowSetpoint( uint8_t nSpeed, uint8_t nSide, float flCFM )
+{
+	if( nSpeed >= BroanFanSpeed::MAX_FAN_SPEEDS || nSide >= BroanFlowSide::MAX_FLOW_SIDES )
+		return;
+
+	float rgflSide[BroanFanSpeed::MAX_FAN_SPEEDS];
+	for( int i=0; i<BroanFanSpeed::MAX_FAN_SPEEDS; i++ )
+		rgflSide[i] = m_vecFields[g_rgFlowFields[i][nSide]].m_value.m_flValue;
+
+	float flCurrent = rgflSide[nSpeed];
+	rgflSide[nSpeed] = flCFM;
+
+	const char *pszProblem = nullptr;
+	for( int i=0; i<BroanFanSpeed::MAX_FAN_SPEEDS; i++ )
+	{
+		if( i != nSpeed && rgflSide[i] == 0.f )
+			pszProblem = "the other setpoints have not been read from the ERV yet";
+	}
+	if( !pszProblem && ( rgflSide[BroanFanSpeed::Minimum] > rgflSide[BroanFanSpeed::Medium] || rgflSide[BroanFanSpeed::Medium] > rgflSide[BroanFanSpeed::High] ) )
+		pszProblem = "it must keep minimum <= medium <= high";
+
+	if( pszProblem )
+	{
+		ESP_LOGW("broan","Flow setpoint %s %s = %.0f CFM not set: %s (minimum %.0f, medium %.0f, high %.0f)",
+			g_rgFanSpeedNames[nSpeed], nSide == BroanFlowSide::Supply ? "supply" : "exhaust", flCFM, pszProblem,
+			m_vecFields[g_rgFlowFields[BroanFanSpeed::Minimum][nSide]].m_value.m_flValue,
+			m_vecFields[g_rgFlowFields[BroanFanSpeed::Medium][nSide]].m_value.m_flValue,
+			m_vecFields[g_rgFlowFields[BroanFanSpeed::High][nSide]].m_value.m_flValue );
+#ifdef USE_NUMBER
+		// Put Home Assistant back on the ERV's value
+		if( m_rgFlowNumbers[nSpeed][nSide] && flCurrent != 0.f )
+			m_rgFlowNumbers[nSpeed][nSide]->publish_state( flCurrent );
+#endif
+		return;
+	}
+
+	std::vector<BroanField_t> vecFields;
+	for( int nWriteSide=0; nWriteSide<BroanFlowSide::MAX_FLOW_SIDES; nWriteSide++ )
+	{
+		BroanField_t &field = m_vecFields[g_rgFlowFields[nSpeed][nWriteSide]];
+		vecFields.push_back( field.copyForUpdate( nWriteSide == nSide ? flCFM : field.m_value.m_flValue ) );
+		field.markDirty();
 	}
 
 	writeRegisters( vecFields );

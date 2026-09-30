@@ -643,6 +643,19 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 
 	if( bSetpointsChanged )
 	{
+#ifdef USE_NUMBER
+		for( int nSpeed=0; nSpeed<BroanFanSpeed::MAX_FAN_SPEEDS; nSpeed++ )
+		{
+			for( int nSide=0; nSide<BroanFlowSide::MAX_FLOW_SIDES; nSide++ )
+			{
+				float flValue = m_vecFields[g_rgFlowFields[nSpeed][nSide]].m_value.m_flValue;
+				number::Number *pNumber = m_rgFlowNumbers[nSpeed][nSide];
+				if( pNumber && flValue != 0.f && ( !pNumber->has_state() || pNumber->state != flValue ) )
+					pNumber->publish_state( flValue );
+			}
+		}
+#endif
+
 		ESP_LOGI("broan","Flow setpoints (supply / exhaust CFM): min %.0f / %.0f, med %.0f / %.0f, max %.0f / %.0f",
 			m_vecFields[CFMIn_Min].m_value.m_flValue, m_vecFields[CFMOut_Min].m_value.m_flValue,
 			m_vecFields[CFMIn_Medium].m_value.m_flValue, m_vecFields[CFMOut_Medium].m_value.m_flValue,

@@ -38,6 +38,7 @@ Also be aware some RS485 devices will label their pins A and B instead of D+ and
 * Setting fan mode: Off, Air Exchange, Intermittent, Intermittent + Recirculate, Turbo, Humidity, Recirculate, Smart. Override is shown when an auxiliary remote forces the ERV, it can't be selected. Like the wall controller, every fan mode write (00:20) is followed by 08:20 = 0x00; without it, Air Exchange Medium runs slower than Minimum on some units.
 * Setting fan speed (Minimum, Medium, High) for Air Exchange, Recirculate and Intermittent + Recirculate. In other modes the choice is kept and applied when switching to one of these modes. The last choice survives reboots.
 * Intermittent period, in minutes ON per hour (10 to 55, steps of 5)
+* Installer flow setpoints (CFM) for Minimum, Medium and High, supply and exhaust. Like the wall controller, both sides of a speed are written together (supply first), and minimum <= medium <= high is enforced on each side. Values are only written when changed from Home Assistant, never automatically.
 * Humidity control mode
 * Intake temperature
 * Filter life left
@@ -117,6 +118,23 @@ number:
     # the ERV runs 20 minutes and is off 40 minutes every hour)
     intermittent_period:
       name: "Intermittent Period"
+
+    # Installer flow setpoints, in CFM (entry box, step 1). Default range 65 to 193
+    # (VanEE V180H75RT datasheet), change it with min_value / max_value.
+    # Registers: minimum 0A:50 / 0B:50, medium 06:22 / 08:22, high 0E:50 / 0F:50.
+    minimum_supply_flow:
+      name: "Minimum supply flow"
+    minimum_exhaust_flow:
+      name: "Minimum exhaust flow"
+    medium_supply_flow:
+      name: "Medium supply flow"
+    medium_exhaust_flow:
+      name: "Medium exhaust flow"
+    high_supply_flow:
+      name: "High supply flow"
+      # max_value: 193
+    high_exhaust_flow:
+      name: "High exhaust flow"
 
 sensor:
   - platform: broan

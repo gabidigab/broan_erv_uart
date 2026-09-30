@@ -55,8 +55,8 @@ enum BroanFieldType
 
 enum BroanCFMMode
 {
-	Input = 1 >> 0,
-	Output = 1 >> 1,
+	Input = 1 << 0,
+	Output = 1 << 1,
 	Both = BroanCFMMode::Input | BroanCFMMode::Output,
 };
 
@@ -166,6 +166,22 @@ enum BroanField
 	MAX_FIELDS,
 };
 
+enum BroanFlowSide
+{
+	Supply = 0, // In
+	Exhaust,    // Out
+
+	MAX_FLOW_SIDES,
+};
+
+// Flow setpoint registers (installer menu), per BroanFanSpeed and BroanFlowSide.
+// The wall controller writes both sides of a speed together, supply first.
+inline constexpr uint32_t g_rgFlowFields[BroanFanSpeed::MAX_FAN_SPEEDS][BroanFlowSide::MAX_FLOW_SIDES] = {
+	{ BroanField::CFMIn_Min, BroanField::CFMOut_Min },       // 0A:50 / 0B:50
+	{ BroanField::CFMIn_Medium, BroanField::CFMOut_Medium }, // 06:22 / 08:22
+	{ BroanField::CFMIn_Max, BroanField::CFMOut_Max },       // 0E:50 / 0F:50
+};
+
 struct BroanField_t
 {
 	uint8_t m_nOpcodeHigh;
@@ -221,6 +237,11 @@ class BroanComponent : public Component, public uart::UARTDevice
 #endif
 
 #ifdef USE_NUMBER
+public:
+	void set_flow_setpoint_number( uint8_t nSpeed, uint8_t nSide, number::Number *pNumber ) { m_rgFlowNumbers[nSpeed][nSide] = pNumber; }
+protected:
+	number::Number *m_rgFlowNumbers[BroanFanSpeed::MAX_FAN_SPEEDS][BroanFlowSide::MAX_FLOW_SIDES] = {};
+
 	SUB_NUMBER(humidity_setpoint)
 	SUB_NUMBER(intermittent_period)
 #endif
@@ -343,6 +364,7 @@ public:
 	void setFanMode( const std::string &mode );
 	void setFanSpeed( const std::string &speed );
 	void setFanSpeedCFM( BroanFanMode mode, BroanCFMMode direction, float flTargetCFM );
+	void setFlowSetpoint( uint8_t nSpeed, uint8_t nSide, float flCFM );
 	void resetFilter();
 	void setHumidityControl( bool enable );
 	void setHumiditySetpoint( float humidity );
