@@ -59,6 +59,15 @@ broan:
 ```
 In this mode the ESP never transmits. Every register the wall controller writes is logged as `Sniffed write XXYY (known|UNKNOWN): ...`. Change the setting on the wall controller and look for the matching line. Remove `listen_only` (and disconnect the wall controller) to use the ESP as the controller again.
 
+## Forcing the Air Exchange Medium flow
+Air Exchange Medium runs at the ERV's MED setpoints (06:22 supply, 08:22 exhaust). If they end up below the minimum flow on your unit, you can force them:
+```
+broan:
+  uart_id: rs485
+  air_exchange_medium_cfm: 110
+```
+The setpoints are written before switching to Air Exchange Medium, and put back (at most once a minute) if the ERV reports something else while in that mode. Other modes and speeds are not affected.
+
 ## FAQ
 Q: I see errors about failed communication
 
