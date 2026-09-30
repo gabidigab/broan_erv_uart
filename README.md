@@ -36,7 +36,8 @@ Also be aware some RS485 devices will label their pins A and B instead of D+ and
 
 ## Supported features
 * Setting fan mode: Off, Air Exchange, Intermittent, Intermittent + Recirculate, Turbo, Humidity, Recirculate, Smart. Override is shown when an auxiliary remote forces the ERV, it can't be selected. Like the wall controller, every fan mode write (00:20) is followed by 08:20 = 0x00; without it, Air Exchange Medium runs slower than Minimum on some units.
-* Setting fan speed (Minimum, Medium, High) for Air Exchange, Recirculate and Intermittent + Recirculate. In other modes the choice is kept and applied when switching to one of these modes. The last choice survives reboots.
+* Setting fan speed (Minimum, Medium, High) for Air Exchange, Recirculate, Intermittent + Recirculate and Intermittent. In other modes the choice is kept and applied when switching to one of these modes. The last choice survives reboots.
+  * Intermittent (without recirculation) is experimental: the wall controller offers no speed there and writes 0E:22 = 0x00. We send the selected speed in 0E:22 anyway; whether the ERV honours it is still to be validated on the unit.
 * Intermittent period, in minutes ON per hour (10 to 55, steps of 5)
 * Installer defrost mode: Discretion (factory setting, defrost without fan speed change) or Plus (extended defrost for colder regions). Register 12:50, written alone like the wall controller, never automatically.
 * Installer flow setpoints (CFM) for Minimum, Medium and High, supply and exhaust. Like the wall controller, both sides of a speed are written together (supply first), and minimum <= medium <= high is enforced on each side. Values are only written when changed from Home Assistant, never automatically. Like the wall controller, values outside the ERV's own limits (lowest 0C:50, highest 11:50, eg 65 to 152.52 CFM) are refused; until those are read, the entity range applies.
@@ -108,8 +109,8 @@ select:
     # Recirculate, Smart, Override (read only)
     fan_mode:
       name: "fan mode"
-    # Minimum, Medium, High. Used by Air Exchange, Recirculate and
-    # Intermittent + Recirculate
+    # Minimum, Medium, High. Used by Air Exchange, Recirculate,
+    # Intermittent + Recirculate and Intermittent (experimental)
     fan_speed:
       name: "fan speed"
     # Installer menu: Discretion (factory setting) or Plus (colder regions)

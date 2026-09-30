@@ -70,7 +70,7 @@ enum BroanFanMode
 	RecirculateMin = 0x05,
 	RecirculateMax = 0x06,
 	RecirculateMed = 0x07,
-	Intermittent = 0x08, // With or without recirculation, see IntRecirculate
+	Intermittent = 0x08, // With or without recirculation, see IntRecirculate. Speed in IntSpeed.
 	Min = 0x09,
 	Max = 0x0a,
 	Manual = 0x0b, // Medium speed air exchange
@@ -296,7 +296,7 @@ public:
 		// Control
 		{ 0x00, 0x20, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // FanMode
 		{ 0x03, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode: recirculate during the off period. 0x00 = off, 0x01 = on
-		{ 0x0E, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode + recirculation speed, for both the exchange and recirculation phases. 0x00 = min, 0x01 = max, 0x02 = med. Wall controller writes 0x00 without recirculation.
+		{ 0x0E, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode speed. 0x00 = min, 0x01 = max, 0x02 = med. With recirculation (03:22 = 0x01) it applies to both the exchange and recirculation phases (confirmed on a VanEE V180H75RT). Without recirculation the wall controller offers no speed and writes 0x00; we send the selected speed anyway, experimental, to validate on the ERV.
 		{ 0x08, 0x20, BroanFieldType::Byte, {0}, UPDATE_RATE_NEVER }, // Meaning unknown. A VanEE V180H75RT wall controller writes 0x00 right after 00:20 on every mode change (air exchange, recirculation, intermittent). Without it, air exchange medium (0x0B) runs slower than minimum, so we mimic it.
 		{ 0x12, 0x50, BroanFieldType::Byte, {0}, UPDATE_RATE_SLOW }, // Defrost mode (installer menu), see BroanDefrostMode. The wall controller writes it alone.
 
