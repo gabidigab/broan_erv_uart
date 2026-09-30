@@ -59,7 +59,7 @@ broan:
   uart_id: rs485
   listen_only: true
 ```
-In this mode the ESP never transmits. Every register the wall controller writes is logged as `Sniffed write XXYY (known|UNKNOWN): ...`. Change the setting on the wall controller and look for the matching line. Remove `listen_only` (and disconnect the wall controller) to use the ESP as the controller again.
+In this mode the ESP never transmits. Every register the wall controller writes is logged as `Sniffed write XXYY (known|UNKNOWN): ...`. The ERV's answers to the wall controller's reads are logged as `Sniffed read XXYY (known|UNKNOWN): ...`, the first time a register is seen and whenever its value changes (the wall controller polls in a loop). Change the setting on the wall controller and look for the matching line. Remove `listen_only` (and disconnect the wall controller) to use the ESP as the controller again.
 
 ## FAQ
 Q: I see errors about failed communication

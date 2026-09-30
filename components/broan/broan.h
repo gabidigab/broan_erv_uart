@@ -422,7 +422,8 @@ private:
 	void runTasks();
 	void parseBroanFields(const std::vector<uint8_t>& message);
 #ifdef LISTEN_ONLY
-	void logRegisterWrites(const std::vector<uint8_t>& message);
+	void logSniffedFields(const std::vector<uint8_t>& message, const char *pszWhat, bool bOnlyChanges);
+	std::map<uint16_t, std::vector<uint8_t>> m_mapSniffedReads; // Last value logged per register
 #endif
 	void writeRegisters( const std::vector<BroanField_t> &values );
 
