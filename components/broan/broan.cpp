@@ -18,7 +18,17 @@ void BroanComponent::setup()
   	if(flow_control_pin_)
     	this->flow_control_pin_->setup();
 
+	// Restore the last fan speed choice, Medium otherwise.
+	m_prefFanSpeed = global_preferences->make_preference<uint8_t>( fnv1_hash("broan_fan_speed") );
+	uint8_t nSavedSpeed;
+	if( m_prefFanSpeed.load( &nSavedSpeed ) && nSavedSpeed < BroanFanSpeed::MAX_FAN_SPEEDS )
+		m_nFanSpeed = nSavedSpeed;
+
 	// Initial state
+#ifdef USE_SELECT
+	if( fan_speed_select_ )
+		fan_speed_select_->publish_state( g_rgFanSpeedNames[m_nFanSpeed] );
+#endif
 #ifdef USE_TEXT_SENSOR
 	if( warning_code_text_sensor_ )
 		warning_code_text_sensor_->publish_state("OK");
@@ -365,6 +375,7 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 	bool bPublish = false;
 
 	std::string strBuf;
+	bool bFanStateChanged = false;
 
     while (i + 3 <= message.size())
     {
@@ -406,42 +417,16 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 		}
 
 
-#ifdef USE_NUMBER
-		// The fan speed slider reflects the recirculation level while recirculating.
-		if( unField == BroanField::FanMode )
-			publishFanSpeed();
-#endif
-
 		switch(unField)
 		{
-#ifdef USE_SELECT
+			// Mode and speed are spread over these registers, publish once
+			// they have all been parsed.
 			case BroanField::FanMode:
-			{
-				if( !fan_mode_select_ )
-					continue;
-
-				std::string strMode;
-				switch( pField->m_value.m_chValue )
-				{
-					case BroanFanMode::Ovr: strMode = "ovr"; break;
-					case BroanFanMode::Intermittent: strMode = "int"; break;
-					case BroanFanMode::Min: strMode = "min"; break;
-					case BroanFanMode::Max: strMode = "max"; break;
-					case BroanFanMode::Manual: strMode = "manual"; break;
-					case BroanFanMode::Turbo: strMode = "turbo"; break;
-					case BroanFanMode::Humidity: strMode = "humidity"; break;
-					case BroanFanMode::RecirculateMin: strMode = "recirculate_min"; break;
-					case BroanFanMode::RecirculateMed: strMode = "recirculate_med"; break;
-					case BroanFanMode::Recirculate: strMode = "recirculate"; break;
-					case BroanFanMode::Smart: strMode = "smart"; break;
-
-					default: strMode = "off"; break;
-				}
-
-				fan_mode_select_->publish_state( strMode );
-			}
+			case BroanField::IntRecirculate:
+			case BroanField::IntSpeed:
+				bFanStateChanged = true;
 			break;
-#endif
+
 #ifdef USE_SENSOR
 			case BroanField::Wattage:
 				if( !power_sensor_ )
@@ -509,11 +494,6 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 				if( !humidity_setpoint_number_ )
 					continue;
 				humidity_setpoint_number_->publish_state(pField->m_value.m_flValue);
-			break;
-
-			// @todo: We don't support unbalanced values here currently....
-			case BroanField::CFMIn_Medium:
-				publishFanSpeed();
 			break;
 
 			case BroanField::IntModeDuration:
@@ -641,6 +621,9 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 				break;
 		}
     }
+
+	if( bFanStateChanged )
+		publishFanState();
 }
 
 void BroanComponent::handleUnknownField(uint32_t nOpcodeHigh, uint32_t nOpcodeLow, uint8_t len, uint32_t i, const std::vector<uint8_t>& message )
@@ -848,28 +831,6 @@ void BroanComponent::runTasks()
 #endif
 }
 
-#ifdef USE_NUMBER
-void BroanComponent::publishFanSpeed()
-{
-	if( !fan_speed_number_ )
-		return;
-
-	switch( m_vecFields[FanMode].m_value.m_chValue )
-	{
-		case BroanFanMode::RecirculateMin: fan_speed_number_->publish_state(0.f); return;
-		case BroanFanMode::RecirculateMed: fan_speed_number_->publish_state(50.f); return;
-		case BroanFanMode::Recirculate: fan_speed_number_->publish_state(100.f); return;
-	}
-
-	float flMin = m_vecFields[CFMIn_Min].m_value.m_flValue;
-	float flMax = m_vecFields[CFMIn_Max].m_value.m_flValue;
-	if( flMax <= flMin )
-		return;
-
-	fan_speed_number_->publish_state( remap( m_vecFields[CFMIn_Medium].m_value.m_flValue, flMin, flMax, 0.f, 100.f ) );
-}
-#endif
-
 std::string BroanComponent::activeModeToString( int code )
 {
 	// @todo: Figure these out
@@ -894,9 +855,9 @@ std::string BroanComponent::activeModeToString( int code )
 		case 3: return "Turbo";
 		case 4: return "Manual";
 		// Observed on a VanEE V180H75RT
-		case 6: return "Recirculate Min";
-		case 7: return "Recirculate Max";
-		case 8: return "Recirculate Med";
+		case 6: return "Recirculate Minimum";
+		case 7: return "Recirculate High";
+		case 8: return "Recirculate Medium";
 	}
 	
 

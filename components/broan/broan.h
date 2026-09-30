@@ -60,27 +60,61 @@ enum BroanCFMMode
 	Both = BroanCFMMode::Input | BroanCFMMode::Output,
 };
 
+// Values of the FanMode register (00:20). Continuous air exchange and
+// recirculation encode their speed in the mode itself, in min / max / med
+// order. Recirculation = air exchange - 4.
 enum BroanFanMode
 {
 	Off = 0x01,
-	Ovr = 0x02,
-	Intermittent = 0x08,
+	Ovr = 0x02, // Set by the auxiliary (dry contact) remotes. Read only.
 	RecirculateMin = 0x05,
-	Recirculate = 0x06, // Recirculation at max speed
+	RecirculateMax = 0x06,
 	RecirculateMed = 0x07,
+	Intermittent = 0x08, // With or without recirculation, see IntRecirculate
 	Min = 0x09,
 	Max = 0x0a,
-	Smart = 0x11,
-	Manual = 0x0b,
+	Manual = 0x0b, // Medium speed air exchange
 	Turbo = 0x0c,
 	Humidity = 0x0d,
 	Away = 0x0F, // "OTH", no idea what this actually does?
+	Smart = 0x11,
 };
+
+// Speed choice exposed by the fan speed select. Applies to air exchange,
+// recirculation and intermittent + recirculation.
+enum BroanFanSpeed
+{
+	Minimum = 0,
+	Medium,
+	High,
+
+	MAX_FAN_SPEEDS,
+};
+
+// Select options. Keep in sync with select/__init__.py
+#define FAN_MODE_OFF "Off"
+#define FAN_MODE_AIR_EXCHANGE "Air Exchange"
+#define FAN_MODE_INTERMITTENT "Intermittent"
+#define FAN_MODE_INTERMITTENT_RECIRCULATE "Intermittent + Recirculate"
+#define FAN_MODE_TURBO "Turbo"
+#define FAN_MODE_HUMIDITY "Humidity"
+#define FAN_MODE_RECIRCULATE "Recirculate"
+#define FAN_MODE_SMART "Smart"
+#define FAN_MODE_OVERRIDE "Override"
+
+inline constexpr const char *g_rgFanSpeedNames[BroanFanSpeed::MAX_FAN_SPEEDS] = { "Minimum", "Medium", "High" };
+
+// Register values for each BroanFanSpeed
+inline constexpr uint8_t g_rgAirExchangeModes[BroanFanSpeed::MAX_FAN_SPEEDS] = { BroanFanMode::Min, BroanFanMode::Manual, BroanFanMode::Max };
+inline constexpr uint8_t g_rgRecirculateModes[BroanFanSpeed::MAX_FAN_SPEEDS] = { BroanFanMode::RecirculateMin, BroanFanMode::RecirculateMed, BroanFanMode::RecirculateMax };
+inline constexpr uint8_t g_rgIntSpeeds[BroanFanSpeed::MAX_FAN_SPEEDS] = { 0x00, 0x02, 0x01 }; // IntSpeed (0E:22)
 
 enum BroanField
 {
 	// Control
 	FanMode = 0,
+	IntRecirculate, // Keep right after FanMode so they are polled together
+	IntSpeed,
 	HumidityControl,
 	IntModeDuration,
 	TargetHumidityA, // Set both to same value per VTSPEEDW
@@ -182,10 +216,10 @@ class BroanComponent : public Component, public uart::UARTDevice
 
 #ifdef USE_SELECT
 	SUB_SELECT(fan_mode)
+	SUB_SELECT(fan_speed)
 #endif
 
 #ifdef USE_NUMBER
-	SUB_NUMBER(fan_speed)
 	SUB_NUMBER(humidity_setpoint)
 	SUB_NUMBER(intermittent_period)
 #endif
@@ -219,6 +253,8 @@ public:
 		// Known fields
 		// Control
 		{ 0x00, 0x20, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // FanMode
+		{ 0x03, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode: recirculate during the off period. 0x00 = off, 0x01 = on
+		{ 0x0E, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_FAST }, // INT mode + recirculation speed, for both the exchange and recirculation phases. 0x00 = min, 0x01 = max, 0x02 = med. Wall controller writes 0x00 without recirculation.
 		{ 0x0F, 0x22, BroanFieldType::Byte, {0}, UPDATE_RATE_SLOW }, // Humidity control on/off
 		{ 0x02, 0x22, BroanFieldType::Int, {0}, UPDATE_RATE_SLOW }, // INT mode on time (seconds, OFF time will be what remains of an hour)
 		{ 0x0C, 0x22, BroanFieldType::Float, {0}, UPDATE_RATE_SLOW }, // Target humidity?
@@ -282,7 +318,7 @@ public:
 		{ 0x00, 0x22, BroanFieldType::Int, {0} }, // Unknown. 14400 / 40380000
 		{ 0x07, 0x50, BroanFieldType::Int, {0} }, // Unknown. VTSPEEDW often sets this to -1
 		{ 0x03, 0x20, BroanFieldType::Byte, {0} }, // Unknown. Set to 0 when entering INT mode
-		{ 0x08, 0x20, BroanFieldType::Byte, {0} }, // Unknown. Set to 0 when entering SMART mode, set to 1 in continuous modes.
+		{ 0x08, 0x20, BroanFieldType::Byte, {0} }, // Unknown. Set to 0 when entering SMART mode, set to 1 in continuous modes. The wall controller also writes 0 on every mode change to recirculation (continuous) and intermittent (VanEE V180H75RT).
 
 		// Airstream humidity? Needs verification. Broan wiring and parts diagrams for b150e75nt do not list humidity sensors, only the single j7a thermistor. 
 		// May be specific to certain models, this model DOES report changing values on these registers, so I'm suspicious.
@@ -303,8 +339,8 @@ public:
 	void set_flow_control_pin(GPIOPin *flow_control_pin) { this->flow_control_pin_ = flow_control_pin; }
 
 	// Control API
-	void setFanMode( std::string mode );
-	void setFanSpeed( float speed );
+	void setFanMode( const std::string &mode );
+	void setFanSpeed( const std::string &speed );
 	void setFanSpeedCFM( BroanFanMode mode, BroanCFMMode direction, float flTargetCFM );
 	void resetFilter();
 	void setHumidityControl( bool enable );
@@ -363,10 +399,14 @@ private:
 
 	void queueMessage(std::vector<uint8_t>& message);
 	std::string activeModeToString( int code );
-	static bool isRecirculateMode( uint8_t mode ) { return mode >= BroanFanMode::RecirculateMin && mode <= BroanFanMode::RecirculateMed; }
-#ifdef USE_NUMBER
-	void publishFanSpeed();
-#endif
+
+	// Fan mode / speed
+	void publishFanState();
+	void storeFanSpeed( uint8_t nSpeed );
+	std::vector<BroanField_t> fanModeFields( const std::string &mode, uint8_t nSpeed );
+
+	uint8_t m_nFanSpeed = BroanFanSpeed::Medium; // Last speed chosen or reported by the ERV
+	ESPPreferenceObject m_prefFanSpeed;
 
 
 protected:
