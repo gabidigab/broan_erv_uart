@@ -502,7 +502,8 @@ void BroanComponent::parseBroanFields(const std::vector<uint8_t>& message)
 				if( !intermittent_period_number_ )
 					continue;
 
-				intermittent_period_number_->publish_state(pField->m_value.m_nValue /* / 1000 */ );
+				// Seconds -> minutes per hour. Published as is, even off the 5 minute steps.
+				intermittent_period_number_->publish_state( pField->m_value.m_nValue / 60.f );
 			break;
 #endif
 #ifdef USE_SWITCH
